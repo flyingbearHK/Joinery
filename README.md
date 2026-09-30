@@ -138,6 +138,8 @@ src/components/           Desktop shell, inspectors, dialogs, and navigators
 src-tauri/                Atomic file I/O, PNG/PDF rendering, desktop lifecycle
 src-tauri/tests/fixtures/  Native export compatibility fixtures
 e2e/                      Browser-level interaction tests
+docs/COMPACT_MEMORY.md     Concise handoff for resumed/compacted sessions
+docs/PROJECT_MEMORY.md     Durable decisions and constraints
 .github/workflows/         macOS/Windows CI and draft release builds
 ```
 

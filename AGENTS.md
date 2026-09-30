@@ -6,14 +6,16 @@ This file is the entry point for future coding sessions.
 
 Before making changes, read these files:
 
-1. `docs/PROJECT_MEMORY.md` — durable product and architecture decisions.
-2. `TODO.md` — prioritized work and current milestone status.
-3. `README.md` — supported commands and current user-facing behavior.
+1. `docs/COMPACT_MEMORY.md` — concise current-state handoff.
+2. `docs/PROJECT_MEMORY.md` — durable product and architecture decisions.
+3. `TODO.md` — prioritized work and current milestone status.
+4. `README.md` — supported commands and current user-facing behavior.
 
 After meaningful work:
 
 - Update `TODO.md` by moving completed work and recording newly discovered tasks.
 - Update `docs/PROJECT_MEMORY.md` only when a durable decision, constraint, blocker, or architectural fact changes.
+- Keep `docs/COMPACT_MEMORY.md` short and current enough to resume after context compaction.
 - Run `npm test` and `npm run build`.
 - For Rust changes, also run rustfmt, `cargo check`, and Clippy against `src-tauri/Cargo.toml`.
 - Do not mark native Tauri work verified unless it was compiled with Rust and exercised in the desktop shell.

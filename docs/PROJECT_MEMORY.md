@@ -107,6 +107,14 @@ Confirmed constraints remain:
 - Draft release automation includes universal macOS and Windows artifacts, signing/notarization environment hooks, and signed updater configuration. Real credentials are intentionally absent.
 - See `docs/DISTRIBUTION.md` and `THIRD_PARTY_NOTICES.md`.
 
+## Source control
+
+- Git is initialized on branch `main`.
+- Baseline commit: `481aa66 feat: establish Joinery logical modeler baseline`.
+- Repository-local identity is `FlyingBear <flyingbear@local>` because no global identity was configured; replace it before publishing if desired.
+- No remote is configured.
+- Generated frontend, Rust, test, and release-secret artifacts are ignored.
+
 ## Known external verification items
 
 - Human-test native Open/Save/Save As, recovery prompts, export dialogs/files, and graceful quit.
