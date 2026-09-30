@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Joinery">
+  <defs>
+    <linearGradient id="background" x1="72" y1="48" x2="440" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9272D8"/>
+      <stop offset="1" stop-color="#5D3AA6"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#2B1857" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#background)"/>
+  <g filter="url(#shadow)" stroke-linejoin="round">
+    <path d="M88 128H236V208H276V304H236V384H88Z" fill="#FFFFFF"/>
+    <path d="M424 128H276V208H236V304H276V384H424Z" fill="#DCCFF7"/>
+  </g>
+  <path d="M236 208H276V304H236" fill="none" stroke="#7653BD" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity=".46"/>
+</svg>
