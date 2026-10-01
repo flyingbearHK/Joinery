@@ -4,6 +4,7 @@ export const PROJECT_FORMAT_VERSION = 1;
 export type EntityId = string;
 export type AttributeId = string;
 export type IdentifierId = string;
+export type InversionEntryId = string;
 export type RelationshipId = string;
 export type DiagramId = string;
 export type DiagramNoteId = string;
@@ -12,7 +13,16 @@ export type SubjectAreaId = string;
 export type RelationshipKind = "association" | "inheritance";
 
 export type Cardinality =
-  "zero-or-one" | "exactly-one" | "zero-or-many" | "one-or-many";
+  "zero-or-one" | "exactly-one" | "zero-or-many" | "one-or-many" | `exactly-${number}`;
+
+export function exactCardinalityCount(cardinality: Cardinality): number | null {
+  const match = /^exactly-(\d+)$/.exec(cardinality);
+  return match ? Number(match[1]) : null;
+}
+
+export function isExactCardinality(cardinality: Cardinality): boolean {
+  return exactCardinalityCount(cardinality) !== null;
+}
 
 export interface Attribute {
   id: AttributeId;
@@ -32,6 +42,16 @@ export interface EntityIdentifier {
   attributeIds: AttributeId[];
 }
 
+// A named, non-identifying access path over an entity's attributes — the
+// erwin-style "inversion entry". Unlike an identifier it asserts no uniqueness;
+// it records that the attribute set is a meaningful way to reach occurrences.
+export interface InversionEntry {
+  id: InversionEntryId;
+  name: string;
+  description: string;
+  attributeIds: AttributeId[];
+}
+
 export interface Entity {
   id: EntityId;
   name: string;
@@ -39,6 +59,18 @@ export interface Entity {
   color: string;
   attributes: Attribute[];
   identifiers: EntityIdentifier[];
+  inversionEntries: InversionEntry[];
+}
+
+// One entity's participation in an n-ary relationship. `cardinality` is the
+// number of this entity's occurrences per relationship instance; `role` and
+// `attributeId` mirror the binary endpoint semantics.
+export interface RelationshipParticipant {
+  id: string;
+  entityId: EntityId;
+  attributeId: AttributeId | null;
+  role: string;
+  cardinality: Cardinality;
 }
 
 export interface Relationship {
@@ -55,6 +87,44 @@ export interface Relationship {
   sourceCardinality: Cardinality;
   targetCardinality: Cardinality;
   isIdentifying: boolean;
+  /**
+   * Present only when the relationship is n-ary (three or more participants).
+   * Binary relationships keep using the source- and target-prefixed fields.
+   * For n-ary relationships those binary fields mirror participants[0] and
+   * participants[1] as a compatibility projection for name-based lookups.
+   */
+  participants?: RelationshipParticipant[];
+}
+
+export function isNaryRelationship(relationship: Relationship): boolean {
+  return (
+    relationship.kind === "association" && (relationship.participants?.length ?? 0) >= 3
+  );
+}
+
+/** Canonical participant list — synthesizes the two endpoints for binaries. */
+export function relationshipParticipants(
+  relationship: Relationship,
+): RelationshipParticipant[] {
+  if (isNaryRelationship(relationship) && relationship.participants) {
+    return relationship.participants;
+  }
+  return [
+    {
+      id: `${relationship.id}-source`,
+      entityId: relationship.sourceEntityId,
+      attributeId: relationship.sourceAttributeId,
+      role: relationship.sourceRole,
+      cardinality: relationship.sourceCardinality,
+    },
+    {
+      id: `${relationship.id}-target`,
+      entityId: relationship.targetEntityId,
+      attributeId: relationship.targetAttributeId,
+      role: relationship.targetRole,
+      cardinality: relationship.targetCardinality,
+    },
+  ];
 }
 
 export interface EntityView {
@@ -66,6 +136,8 @@ export interface EntityView {
 
 export interface RelationshipView {
   vertices: Point[];
+  /** Position of the n-ary relationship hub node, when the user moved it. */
+  hub?: Point;
 }
 
 export interface DiagramNote {
@@ -76,6 +148,10 @@ export interface DiagramNote {
   width: number;
   height: number;
   color: string;
+  /** When set, the note is a comment anchored to that entity: it follows the
+   * entity when it moves, hides while the entity is hidden, and is removed if
+   * the entity is deleted. */
+  entityId?: EntityId;
 }
 
 export interface SubjectArea {
@@ -170,6 +246,8 @@ export const COMMON_LOGICAL_TYPES = [
 ] as const;
 
 export function cardinalityLabel(cardinality: Cardinality): string {
+  const exact = exactCardinalityCount(cardinality);
+  if (exact !== null) return `Exactly ${exact}`;
   return (
     CARDINALITY_OPTIONS.find((option) => option.value === cardinality)?.label ??
     cardinality

@@ -1,12 +1,16 @@
 import { Graph, Node, type Edge } from "@antv/x6";
+import { exactCardinalityCount } from "../domain/model";
 import type {
   Cardinality,
   Diagram,
+  DiagramNote,
   Entity,
+  EntityId,
   EntityView,
   JoineryProject,
   Relationship,
   RelationshipId,
+  RelationshipParticipant,
 } from "../domain/model";
 import type { Theme } from "../state/uiStore";
 
@@ -395,6 +399,33 @@ export function createNoteNodeMetadata(
   };
 }
 
+/** Dashed connector rendered between a comment note and the entity it is
+ * attached to. Purely visual — pointer events are disabled so it never
+ * intercepts selection. */
+export function createNoteLinkEdgeMetadata(
+  note: DiagramNote & { entityId: EntityId },
+): Edge.Metadata {
+  return {
+    id: `${note.id}__link`,
+    shape: "edge",
+    source: { cell: note.id },
+    target: { cell: note.entityId },
+    zIndex: 1,
+    attrs: {
+      line: {
+        stroke: "#b9a86a",
+        strokeWidth: 1,
+        strokeDasharray: "4 4",
+        targetMarker: null,
+        sourceMarker: null,
+        pointerEvents: "none",
+      },
+      wrap: { pointerEvents: "none" },
+    },
+    data: { kind: "note-link" },
+  };
+}
+
 export function createSubjectAreaNodeMetadata(
   subjectArea: Diagram["subjectAreas"][string],
   theme: Theme = "light",
@@ -442,12 +473,49 @@ export function createSubjectAreaNodeMetadata(
   };
 }
 
-const markerNames: Record<Cardinality, string> = {
+const markerNames: Partial<Record<Cardinality, string>> = {
   "zero-or-one": "joinery-zero-or-one",
   "exactly-one": "joinery-exactly-one",
   "zero-or-many": "joinery-zero-or-many",
   "one-or-many": "joinery-one-or-many",
 };
+
+function cardinalityMarkerName(cardinality: Cardinality): string {
+  // Exact-N cardinalities render the "exactly one" bar markers plus a count label.
+  return markerNames[cardinality] ?? markerNames["exactly-one"]!;
+}
+
+function cardinalityCountLabel(
+  cardinality: Cardinality,
+  distance: number,
+  dark: boolean,
+): Edge.Label | null {
+  const count = exactCardinalityCount(cardinality);
+  if (count === null) return null;
+  return {
+    position: { distance },
+    attrs: {
+      body: {
+        fill: dark ? "#292634" : "#ffffff",
+        stroke: dark ? "#514b60" : "#e3e0ea",
+        strokeWidth: 1,
+        rx: 6,
+        ry: 6,
+        refWidth: "130%",
+        refHeight: "140%",
+        refX: "-15%",
+        refY: "-20%",
+      },
+      label: {
+        text: `(${count})`,
+        fill: dark ? "#ddd7e8" : "#625c70",
+        fontSize: 8.5,
+        fontWeight: 640,
+        fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+      },
+    },
+  };
+}
 
 let markersRegistered = false;
 
@@ -465,7 +533,7 @@ export function registerJoineryMarkers(): void {
   } as const;
 
   Graph.registerMarker(
-    markerNames["exactly-one"],
+    cardinalityMarkerName("exactly-one"),
     () => ({
       ...common,
       d: "M 3 -7 L 3 7 M 11 -7 L 11 7",
@@ -473,7 +541,7 @@ export function registerJoineryMarkers(): void {
     true,
   );
   Graph.registerMarker(
-    markerNames["zero-or-one"],
+    cardinalityMarkerName("zero-or-one"),
     () => ({
       ...common,
       d: "M 3 -7 L 3 7 M 8 0 A 4 4 0 1 0 16 0 A 4 4 0 1 0 8 0",
@@ -481,7 +549,7 @@ export function registerJoineryMarkers(): void {
     true,
   );
   Graph.registerMarker(
-    markerNames["one-or-many"],
+    cardinalityMarkerName("one-or-many"),
     () => ({
       ...common,
       d: "M 2 0 L 10 -7 M 2 0 L 10 0 M 2 0 L 10 7 M 16 -7 L 16 7",
@@ -489,7 +557,7 @@ export function registerJoineryMarkers(): void {
     true,
   );
   Graph.registerMarker(
-    markerNames["zero-or-many"],
+    cardinalityMarkerName("zero-or-many"),
     () => ({
       ...common,
       d: "M 2 0 L 10 -7 M 2 0 L 10 0 M 2 0 L 10 7 M 13 0 A 4 4 0 1 0 21 0 A 4 4 0 1 0 13 0",
@@ -657,40 +725,48 @@ export function createRelationshipEdgeMetadata(
         sourceMarker:
           relationship.kind === "inheritance"
             ? null
-            : { name: markerNames[relationship.sourceCardinality] },
+            : { name: cardinalityMarkerName(relationship.sourceCardinality) },
         targetMarker:
           relationship.kind === "inheritance"
             ? { name: "block", width: 14, height: 12, open: true }
-            : { name: markerNames[relationship.targetCardinality] },
+            : { name: cardinalityMarkerName(relationship.targetCardinality) },
       },
     },
-    labels: relationship.name
-      ? [
-          {
-            position: 0.5,
-            attrs: {
-              body: {
-                fill: dark ? "#292634" : "#ffffff",
-                stroke: dark ? "#514b60" : "#e3e0ea",
-                strokeWidth: 1,
-                rx: 7,
-                ry: 7,
-                refWidth: "120%",
-                refHeight: "150%",
-                refX: "-10%",
-                refY: "-25%",
-              },
-              label: {
-                text: truncate(relationship.name, 24),
-                fill: dark ? "#ddd7e8" : "#625c70",
-                fontSize: 10,
-                fontWeight: 540,
-                fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+    labels: [
+      ...(relationship.name
+        ? [
+            {
+              position: 0.5,
+              attrs: {
+                body: {
+                  fill: dark ? "#292634" : "#ffffff",
+                  stroke: dark ? "#514b60" : "#e3e0ea",
+                  strokeWidth: 1,
+                  rx: 7,
+                  ry: 7,
+                  refWidth: "120%",
+                  refHeight: "150%",
+                  refX: "-10%",
+                  refY: "-25%",
+                },
+                label: {
+                  text: truncate(relationship.name, 24),
+                  fill: dark ? "#ddd7e8" : "#625c70",
+                  fontSize: 10,
+                  fontWeight: 540,
+                  fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+                },
               },
             },
-          },
-        ]
-      : [],
+          ]
+        : []),
+      ...(relationship.kind === "association"
+        ? [
+            cardinalityCountLabel(relationship.sourceCardinality, 30, dark),
+            cardinalityCountLabel(relationship.targetCardinality, -30, dark),
+          ].filter((label) => label !== null)
+        : []),
+    ],
     data: {
       kind: "relationship",
       relationshipId: relationship.id,
@@ -706,10 +782,244 @@ export function visibleRelationshipIds(
 ): RelationshipId[] {
   const visibleEntities = new Set(Object.keys(diagram.entityViews));
   return Object.values(project.model.relationships)
-    .filter(
-      (relationship) =>
-        visibleEntities.has(relationship.sourceEntityId) &&
-        visibleEntities.has(relationship.targetEntityId),
+    .filter((relationship) =>
+      relationship.participants?.length
+        ? relationship.participants.every((participant) =>
+            visibleEntities.has(participant.entityId),
+          )
+        : visibleEntities.has(relationship.sourceEntityId) &&
+          visibleEntities.has(relationship.targetEntityId),
     )
     .map((relationship) => relationship.id);
+}
+
+// ---------------------------------------------------------------------------
+// N-ary relationships — a labelled hub node plus one leg per participant.
+// ---------------------------------------------------------------------------
+
+const HUB_WIDTH = 108;
+const HUB_HEIGHT = 52;
+
+export function relationshipHubId(relationshipId: string): string {
+  return `${relationshipId}__hub`;
+}
+
+export function relationshipLegId(
+  relationshipId: string,
+  participantId: string,
+): string {
+  return `${relationshipId}__leg__${participantId}`;
+}
+
+/** Maps a hub/leg cell id back to its canonical relationship id. */
+export function relationshipIdFromCellId(cellId: string): string {
+  const hubIndex = cellId.indexOf("__hub");
+  const legIndex = cellId.indexOf("__leg__");
+  const cut = Math.min(
+    hubIndex === -1 ? Infinity : hubIndex,
+    legIndex === -1 ? Infinity : legIndex,
+  );
+  return cut === Infinity ? cellId : cellId.slice(0, cut);
+}
+
+function hubPosition(
+  relationship: Relationship,
+  diagram: Diagram,
+  entities: JoineryProject["model"]["entities"],
+): { x: number; y: number } {
+  const stored = diagram.relationshipViews[relationship.id]?.hub;
+  if (stored) return { x: stored.x, y: stored.y };
+  const centers = (relationship.participants ?? [])
+    .map((participant) => {
+      const view = diagram.entityViews[participant.entityId];
+      const entity = entities[participant.entityId];
+      if (!view || !entity) return null;
+      const size = entityNodeSize(entity, view);
+      return { x: view.x + size.width / 2, y: view.y + size.height / 2 };
+    })
+    .filter((center): center is { x: number; y: number } => Boolean(center));
+  if (centers.length === 0) return { x: 200, y: 200 };
+  return {
+    x: centers.reduce((sum, point) => sum + point.x, 0) / centers.length,
+    y: centers.reduce((sum, point) => sum + point.y, 0) / centers.length,
+  };
+}
+
+export function createRelationshipHubMetadata(
+  relationship: Relationship,
+  diagram: Diagram,
+  entities: JoineryProject["model"]["entities"],
+  theme: Theme = "light",
+): Node.Metadata {
+  const dark = theme === "dark";
+  const center = hubPosition(relationship, diagram, entities);
+  return {
+    id: relationshipHubId(relationship.id),
+    shape: "polygon",
+    x: center.x - HUB_WIDTH / 2,
+    y: center.y - HUB_HEIGHT / 2,
+    width: HUB_WIDTH,
+    height: HUB_HEIGHT,
+    attrs: {
+      body: {
+        refPoints: "0.5,0 1,0.5 0.5,1 0,0.5",
+        fill: dark ? "#2d2840" : "#f4f1fb",
+        stroke: relationship.isIdentifying
+          ? dark
+            ? "#b8a0eb"
+            : "#65558f"
+          : dark
+            ? "#8d86a0"
+            : "#9b93ab",
+        strokeWidth: relationship.isIdentifying ? 1.8 : 1.45,
+        strokeDasharray: relationship.isIdentifying ? "" : "4 3",
+      },
+      label: {
+        text: truncate(relationship.name || "Relationship", 18),
+        fill: dark ? "#e4dff0" : "#4d4660",
+        fontSize: 10,
+        fontWeight: 640,
+        fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+        textWrap: { width: -14, height: -10, ellipsis: true },
+      },
+    },
+    data: {
+      kind: "relationship-hub",
+      relationshipId: relationship.id,
+      renderKey: JSON.stringify({ relationship, theme }),
+    },
+    zIndex: 1,
+  };
+}
+
+export function createNaryLegMetadata(
+  relationship: Relationship,
+  participant: RelationshipParticipant,
+  project: JoineryProject,
+  diagram: Diagram,
+  theme: Theme = "light",
+): Edge.Metadata {
+  const dark = theme === "dark";
+  const hub = hubPosition(relationship, diagram, project.model.entities);
+  const view = diagram.entityViews[participant.entityId];
+  const entity = project.model.entities[participant.entityId];
+  let sourceSide: PortSide = "right";
+  if (view && entity) {
+    const size = entityNodeSize(entity, view);
+    const dx = hub.x - (view.x + size.width / 2);
+    const dy = hub.y - (view.y + size.height / 2);
+    sourceSide =
+      Math.abs(dx) >= Math.abs(dy)
+        ? dx >= 0
+          ? "right"
+          : "left"
+        : dy >= 0
+          ? "bottom"
+          : "top";
+  }
+  const hasAttributePort = Boolean(
+    participant.attributeId &&
+    view &&
+    !view.collapsed &&
+    entity?.attributes.some((attribute) => attribute.id === participant.attributeId),
+  );
+  const sourcePort =
+    hasAttributePort && participant.attributeId
+      ? attributePortId(
+          participant.attributeId,
+          sourceSide === "left" ? "left" : "right",
+        )
+      : sourceSide;
+  const labels: Edge.Label[] = [];
+  const count = exactCardinalityCount(participant.cardinality);
+  if (count !== null) {
+    labels.push({
+      position: { distance: 30 },
+      attrs: {
+        body: {
+          fill: dark ? "#292634" : "#ffffff",
+          stroke: dark ? "#514b60" : "#e3e0ea",
+          strokeWidth: 1,
+          rx: 6,
+          ry: 6,
+          refWidth: "130%",
+          refHeight: "140%",
+          refX: "-15%",
+          refY: "-20%",
+        },
+        label: {
+          text: `(${count})`,
+          fill: dark ? "#ddd7e8" : "#625c70",
+          fontSize: 8.5,
+          fontWeight: 640,
+          fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+        },
+      },
+    });
+  }
+  if (participant.role) {
+    labels.push({
+      position: 0.25,
+      attrs: {
+        body: {
+          fill: dark ? "#292634" : "#ffffff",
+          stroke: dark ? "#514b60" : "#e3e0ea",
+          strokeWidth: 1,
+          rx: 6,
+          ry: 6,
+          refWidth: "115%",
+          refHeight: "140%",
+          refX: "-7.5%",
+          refY: "-20%",
+        },
+        label: {
+          text: truncate(participant.role, 18),
+          fill: dark ? "#c9c2d8" : "#6f6880",
+          fontSize: 9,
+          fontWeight: 560,
+          fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+        },
+      },
+    });
+  }
+  return {
+    id: relationshipLegId(relationship.id, participant.id),
+    shape: "edge",
+    source: { cell: participant.entityId, port: sourcePort },
+    target: {
+      cell: relationshipHubId(relationship.id),
+      anchor: { name: "center" },
+      connectionPoint: { name: "boundary" },
+    },
+    router: { name: "orth", args: { padding: 18 } },
+    connector: { name: "rounded", args: { radius: 8 } },
+    attrs: {
+      wrap: {
+        class: "joinery-edge-hit-area",
+        cursor: "pointer",
+      },
+      line: {
+        class: "joinery-edge-line",
+        stroke: relationship.isIdentifying
+          ? dark
+            ? "#b8a0eb"
+            : "#65558f"
+          : dark
+            ? "#aaa3b8"
+            : "#777184",
+        strokeWidth: relationship.isIdentifying ? 1.8 : 1.45,
+        strokeDasharray: relationship.isIdentifying ? "" : "0",
+        sourceMarker: { name: cardinalityMarkerName(participant.cardinality) },
+        targetMarker: null,
+      },
+    },
+    labels,
+    data: {
+      kind: "relationship",
+      relationshipId: relationship.id,
+      participantId: participant.id,
+      renderKey: JSON.stringify({ relationship, participant, theme }),
+    },
+    zIndex: 1,
+  };
 }

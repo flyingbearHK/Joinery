@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+import type { AttributeImportDraft } from "../domain/attributeImport";
+import type { ModelDifference } from "../domain/compare";
+import { mergeDifferences, type MergeResult } from "../domain/merge";
 import type {
+  Attribute,
   AttributeId,
   Cardinality,
   DiagramId,
@@ -9,11 +13,15 @@ import type {
   EntityIdentifier,
   IdentifierId,
   IdentifierKind,
+  InversionEntry,
+  InversionEntryId,
   JoineryProject,
   Point,
   ProjectSelection,
+  Relationship,
   RelationshipId,
   RelationshipKind,
+  RelationshipParticipant,
 } from "../domain/model";
 import {
   createAttribute,
@@ -107,6 +115,12 @@ export interface ProjectStore {
   duplicateEntity: (entityId: EntityId) => EntityId | null;
 
   addAttribute: (entityId: EntityId, afterAttributeId?: AttributeId) => AttributeId;
+  addAttributes: (
+    entityId: EntityId,
+    drafts: AttributeImportDraft[],
+    afterAttributeId?: AttributeId,
+  ) => AttributeId[];
+  addEntityWithAttributes: (name: string, drafts: AttributeImportDraft[]) => EntityId;
   updateAttribute: (
     entityId: EntityId,
     attributeId: AttributeId,
@@ -122,6 +136,7 @@ export interface ProjectStore {
     attributeId: AttributeId,
     targetIndex: number,
   ) => void;
+  reorderAttributes: (entityId: EntityId, attributeIds: string[]) => void;
   deleteAttribute: (entityId: EntityId, attributeId: AttributeId) => void;
 
   addIdentifier: (entityId: EntityId, kind?: IdentifierKind) => IdentifierId | null;
@@ -131,6 +146,14 @@ export interface ProjectStore {
     changes: Partial<Pick<EntityIdentifier, "name" | "kind" | "attributeIds">>,
   ) => void;
   deleteIdentifier: (entityId: EntityId, identifierId: IdentifierId) => void;
+
+  addInversionEntry: (entityId: EntityId) => InversionEntryId | null;
+  updateInversionEntry: (
+    entityId: EntityId,
+    entryId: InversionEntryId,
+    changes: Partial<Pick<InversionEntry, "name" | "description" | "attributeIds">>,
+  ) => void;
+  deleteInversionEntry: (entityId: EntityId, entryId: InversionEntryId) => void;
 
   addRelationship: (
     sourceEntityId: EntityId,
@@ -147,6 +170,10 @@ export interface ProjectStore {
       sourceCardinality: Cardinality;
       targetCardinality: Cardinality;
       isIdentifying: boolean;
+      participants: Array<
+        Pick<RelationshipParticipant, "entityId"> &
+          Partial<Pick<RelationshipParticipant, "attributeId" | "role" | "cardinality">>
+      >;
     }>,
   ) => RelationshipId | null;
   updateRelationship: (
@@ -167,6 +194,20 @@ export interface ProjectStore {
     }>,
   ) => boolean;
   deleteRelationship: (relationshipId: RelationshipId) => void;
+  setRelationshipParticipants: (
+    relationshipId: RelationshipId,
+    participants: Array<
+      Pick<RelationshipParticipant, "entityId"> &
+        Partial<
+          Pick<RelationshipParticipant, "id" | "attributeId" | "role" | "cardinality">
+        >
+    >,
+  ) => boolean;
+  updateRelationshipHub: (
+    diagramId: DiagramId,
+    relationshipId: RelationshipId,
+    position: Point | null,
+  ) => void;
 
   updateEntityPosition: (
     diagramId: DiagramId,
@@ -184,14 +225,18 @@ export interface ProjectStore {
     relationshipId: RelationshipId,
     vertices: Point[],
   ) => void;
-  addDiagramNote: (diagramId: DiagramId, position?: Point) => string;
+  addDiagramNote: (
+    diagramId: DiagramId,
+    position?: Point,
+    entityId?: EntityId,
+  ) => string;
   updateDiagramNote: (
     diagramId: DiagramId,
     noteId: string,
     changes: Partial<
       Pick<
         JoineryProject["diagrams"][string]["notes"][string],
-        "text" | "x" | "y" | "width" | "height" | "color"
+        "text" | "x" | "y" | "width" | "height" | "color" | "entityId"
       >
     >,
   ) => void;
@@ -209,6 +254,10 @@ export interface ProjectStore {
   ) => void;
   deleteSubjectArea: (diagramId: DiagramId, subjectAreaId: string) => void;
   deleteSelection: () => void;
+  applyComparisonMerge: (
+    comparison: JoineryProject,
+    differences: ModelDifference[],
+  ) => MergeResult;
   resetSampleProject: () => void;
 }
 
@@ -230,6 +279,26 @@ function emptyHistory(): HistoryState {
 function touchProject(state: ProjectStore): void {
   state.project.updatedAt = new Date().toISOString();
   state.isDirty = true;
+}
+
+/** Mirrors the first two participants into the binary fields (compat). */
+function syncBinaryProjection(relationship: Relationship): void {
+  const [first, second] = relationship.participants ?? [];
+  if (!first || !second) return;
+  relationship.sourceEntityId = first.entityId;
+  relationship.sourceAttributeId = first.attributeId;
+  relationship.sourceRole = first.role;
+  relationship.sourceCardinality = first.cardinality;
+  relationship.targetEntityId = second.entityId;
+  relationship.targetAttributeId = second.attributeId;
+  relationship.targetRole = second.role;
+  relationship.targetCardinality = second.cardinality;
+}
+
+/** Turns a participants list of exactly two back into binary endpoint fields. */
+function collapseToBinary(relationship: Relationship): void {
+  syncBinaryProjection(relationship);
+  delete relationship.participants;
 }
 
 function recordHistory(
@@ -293,7 +362,85 @@ function cloneEntity(entity: Entity, copyNumber = 1): Entity {
         .map((attributeId) => attributeIds.get(attributeId))
         .filter((attributeId): attributeId is string => Boolean(attributeId)),
     })),
+    inversionEntries: entity.inversionEntries.map((entry) => ({
+      ...entry,
+      id: createId("inversion_entry"),
+      attributeIds: entry.attributeIds
+        .map((attributeId) => attributeIds.get(attributeId))
+        .filter((attributeId): attributeId is string => Boolean(attributeId)),
+    })),
   };
+}
+
+function buildDraftAttributes(drafts: AttributeImportDraft[]): Attribute[] {
+  return drafts.map((draft) => ({
+    id: createId("attribute"),
+    name: draft.name,
+    logicalType: draft.logicalType,
+    description: draft.description,
+    isRequired: draft.isRequired,
+    isIdentifier: false,
+  }));
+}
+
+function applyIdentifierDrafts(
+  entity: Entity,
+  attributes: Attribute[],
+  drafts: AttributeImportDraft[],
+): void {
+  const keyAttributeIds = drafts.flatMap((draft, index) =>
+    draft.isIdentifier ? [attributes[index].id] : [],
+  );
+  if (keyAttributeIds.length === 0) return;
+  let primary = entity.identifiers.find((identifier) => identifier.kind === "primary");
+  if (!primary) {
+    primary = {
+      id: createId("identifier"),
+      name: "Primary identifier",
+      kind: "primary",
+      attributeIds: [],
+    };
+    entity.identifiers.push(primary);
+  }
+  keyAttributeIds.forEach((attributeId) => {
+    if (!primary.attributeIds.includes(attributeId)) {
+      primary.attributeIds.push(attributeId);
+    }
+  });
+}
+
+/** Creates identifying relationships for import drafts whose "references"
+ * target another entity — each new attribute is mapped to the referenced
+ * entity's first identifier attribute (the classic FK-column workflow). */
+function applyRelationshipDrafts(
+  state: { project: JoineryProject },
+  targetEntityId: EntityId,
+  attributes: Attribute[],
+  drafts: AttributeImportDraft[],
+): void {
+  drafts.forEach((draft, index) => {
+    if (!draft.referencesEntityId) return;
+    const sourceEntity = state.project.model.entities[draft.referencesEntityId];
+    const sourceAttributeId = sourceEntity?.identifiers[0]?.attributeIds[0] ?? null;
+    if (!sourceEntity) return;
+    const id = createId("relationship");
+    const relationship: Relationship = {
+      id,
+      name: "",
+      description: "",
+      kind: "association",
+      sourceRole: "",
+      targetRole: "",
+      sourceEntityId: sourceEntity.id,
+      targetEntityId,
+      sourceAttributeId,
+      targetAttributeId: attributes[index].id,
+      sourceCardinality: "exactly-one",
+      targetCardinality: "zero-or-many",
+      isIdentifying: draft.isIdentifier,
+    };
+    state.project.model.relationships[id] = relationship;
+  });
 }
 
 function selectionExists(
@@ -735,8 +882,30 @@ export const useProjectStore = create<ProjectStore>()(
         delete state.project.model.entities[entityId];
         Object.values(state.project.diagrams).forEach((diagram) => {
           delete diagram.entityViews[entityId];
+          // Attached comments belong to the entity on this diagram.
+          Object.values(diagram.notes).forEach((note) => {
+            if (note.entityId === entityId) delete diagram.notes[note.id];
+          });
         });
         Object.values(state.project.model.relationships).forEach((relationship) => {
+          if (relationship.participants) {
+            relationship.participants = relationship.participants.filter(
+              (participant) => participant.entityId !== entityId,
+            );
+            if (relationship.participants.length < 2) {
+              delete state.project.model.relationships[relationship.id];
+              Object.values(state.project.diagrams).forEach((diagram) => {
+                delete diagram.relationshipViews[relationship.id];
+              });
+              return;
+            }
+            if (relationship.participants.length === 2) {
+              collapseToBinary(relationship);
+              return;
+            }
+            syncBinaryProjection(relationship);
+            return;
+          }
           if (
             relationship.sourceEntityId === entityId ||
             relationship.targetEntityId === entityId
@@ -838,6 +1007,62 @@ export const useProjectStore = create<ProjectStore>()(
       return attribute.id;
     },
 
+    addAttributes: (entityId, drafts, afterAttributeId) => {
+      const entity = get().project.model.entities[entityId];
+      if (!entity || drafts.length === 0) return [];
+      const attributes = buildDraftAttributes(drafts);
+      const before = get();
+      set((state) => {
+        recordHistory(
+          state,
+          before,
+          attributes.length === 1
+            ? "Add attribute"
+            : `Add ${attributes.length} attributes`,
+        );
+        const target = state.project.model.entities[entityId];
+        const afterIndex = afterAttributeId
+          ? target.attributes.findIndex(
+              (candidate) => candidate.id === afterAttributeId,
+            )
+          : -1;
+        if (afterIndex >= 0) {
+          target.attributes.splice(afterIndex + 1, 0, ...attributes);
+        } else {
+          target.attributes.push(...attributes);
+        }
+        applyIdentifierDrafts(target, attributes, drafts);
+        applyRelationshipDrafts(state, entityId, attributes, drafts);
+        syncIdentifierFlags(target);
+        touchProject(state);
+      });
+      return attributes.map((attribute) => attribute.id);
+    },
+
+    addEntityWithAttributes: (name, drafts) => {
+      const entity = createEntity(name.trim() || undefined);
+      const attributes = buildDraftAttributes(drafts);
+      const before = get();
+      set((state) => {
+        recordHistory(state, before, "Add entity");
+        const diagram = state.project.diagrams[state.activeDiagramId];
+        const entityPosition = nextEntityPosition(diagram);
+        entity.attributes.push(...attributes);
+        applyIdentifierDrafts(entity, attributes, drafts);
+        syncIdentifierFlags(entity);
+        state.project.model.entities[entity.id] = entity;
+        applyRelationshipDrafts(state, entity.id, attributes, drafts);
+        diagram.entityViews[entity.id] = {
+          ...entityPosition,
+          collapsed: false,
+          pinned: false,
+        };
+        state.selection = { kind: "entity", id: entity.id };
+        touchProject(state);
+      });
+      return entity.id;
+    },
+
     updateAttribute: (entityId, attributeId, changes) => {
       const entity = get().project.model.entities[entityId];
       const attribute = entity?.attributes.find(
@@ -906,10 +1131,43 @@ export const useProjectStore = create<ProjectStore>()(
       if (sourceIndex < 0 || sourceIndex === boundedTarget) return;
       const before = get();
       set((state) => {
-        recordHistory(state, before, "Reorder attribute");
+        recordHistory(
+          state,
+          before,
+          "Reorder attribute",
+          `attr-move:${entityId}:${attributeId}`,
+        );
         const attributes = state.project.model.entities[entityId].attributes;
         const [attribute] = attributes.splice(sourceIndex, 1);
         attributes.splice(boundedTarget, 0, attribute);
+        touchProject(state);
+      });
+    },
+
+    reorderAttributes: (entityId, attributeIds) => {
+      const entity = get().project.model.entities[entityId];
+      if (!entity) return;
+      const current = new Set(entity.attributes.map((attribute) => attribute.id));
+      const next = new Set(attributeIds);
+      if (
+        attributeIds.length !== entity.attributes.length ||
+        next.size !== attributeIds.length ||
+        current.size !== next.size
+      )
+        return;
+      for (const id of attributeIds) if (!current.has(id)) return;
+      const unchanged = entity.attributes.every(
+        (attribute, index) => attribute.id === attributeIds[index],
+      );
+      if (unchanged) return;
+      const before = get();
+      set((state) => {
+        recordHistory(state, before, "Reorder attributes");
+        const target = state.project.model.entities[entityId];
+        const byId = new Map(
+          target.attributes.map((attribute) => [attribute.id, attribute]),
+        );
+        target.attributes = attributeIds.map((id) => byId.get(id)!);
         touchProject(state);
       });
     },
@@ -933,6 +1191,14 @@ export const useProjectStore = create<ProjectStore>()(
         });
         targetEntity.identifiers = targetEntity.identifiers.filter(
           (identifier) => identifier.attributeIds.length > 0,
+        );
+        targetEntity.inversionEntries.forEach((entry) => {
+          entry.attributeIds = entry.attributeIds.filter(
+            (candidate) => candidate !== attributeId,
+          );
+        });
+        targetEntity.inversionEntries = targetEntity.inversionEntries.filter(
+          (entry) => entry.attributeIds.length > 0,
         );
         syncIdentifierFlags(targetEntity);
         Object.values(state.project.model.relationships).forEach((relationship) => {
@@ -1031,6 +1297,67 @@ export const useProjectStore = create<ProjectStore>()(
       });
     },
 
+    addInversionEntry: (entityId) => {
+      const entity = get().project.model.entities[entityId];
+      if (!entity || entity.attributes.length === 0) return null;
+      const entryId = createId("inversion_entry");
+      const before = get();
+      set((state) => {
+        recordHistory(state, before, "Add inversion entry");
+        const target = state.project.model.entities[entityId];
+        target.inversionEntries.push({
+          id: entryId,
+          name: `Inversion entry ${target.inversionEntries.length + 1}`,
+          description: "",
+          attributeIds: [target.attributes[0].id],
+        });
+        touchProject(state);
+      });
+      return entryId;
+    },
+
+    updateInversionEntry: (entityId, entryId, changes) => {
+      const entity = get().project.model.entities[entityId];
+      const entry = entity?.inversionEntries.find((item) => item.id === entryId);
+      if (!entity || !entry) return;
+      const before = get();
+      set((state) => {
+        recordHistory(
+          state,
+          before,
+          "Edit inversion entry",
+          `inversion-entry:${entryId}:${Object.keys(changes).sort().join(",")}`,
+        );
+        const target = state.project.model.entities[entityId];
+        const targetEntry = target.inversionEntries.find((item) => item.id === entryId);
+        if (!targetEntry) return;
+        if (changes.attributeIds) {
+          const validIds = new Set(target.attributes.map((attribute) => attribute.id));
+          const attributeIds = Array.from(new Set(changes.attributeIds)).filter((id) =>
+            validIds.has(id),
+          );
+          if (attributeIds.length === 0) return;
+          changes = { ...changes, attributeIds };
+        }
+        Object.assign(targetEntry, changes);
+        touchProject(state);
+      });
+    },
+
+    deleteInversionEntry: (entityId, entryId) => {
+      const entity = get().project.model.entities[entityId];
+      if (!entity?.inversionEntries.some((item) => item.id === entryId)) return;
+      const before = get();
+      set((state) => {
+        recordHistory(state, before, "Delete inversion entry");
+        const target = state.project.model.entities[entityId];
+        target.inversionEntries = target.inversionEntries.filter(
+          (entry) => entry.id !== entryId,
+        );
+        touchProject(state);
+      });
+    },
+
     addRelationship: (
       sourceEntityId,
       targetEntityId,
@@ -1050,6 +1377,21 @@ export const useProjectStore = create<ProjectStore>()(
         return null;
       }
 
+      const participantSpecs =
+        (initial.participants?.length ?? 0) >= 3 ? initial.participants : undefined;
+      if (
+        participantSpecs?.some(
+          (spec) =>
+            !project.model.entities[spec.entityId] ||
+            (spec.attributeId &&
+              !project.model.entities[spec.entityId].attributes.some(
+                (attribute) => attribute.id === spec.attributeId,
+              )),
+        )
+      ) {
+        return null;
+      }
+
       const sourceAttributeExists = sourceAttributeId
         ? project.model.entities[sourceEntityId].attributes.some(
             (attribute) => attribute.id === sourceAttributeId,
@@ -1062,17 +1404,21 @@ export const useProjectStore = create<ProjectStore>()(
         : true;
       if (!sourceAttributeExists || !targetAttributeExists) return null;
 
-      const duplicate = Object.values(project.model.relationships).find(
-        (relationship) =>
-          (relationship.sourceEntityId === sourceEntityId &&
-            relationship.targetEntityId === targetEntityId &&
-            relationship.sourceAttributeId === sourceAttributeId &&
-            relationship.targetAttributeId === targetAttributeId) ||
-          (relationship.sourceEntityId === targetEntityId &&
-            relationship.targetEntityId === sourceEntityId &&
-            relationship.sourceAttributeId === targetAttributeId &&
-            relationship.targetAttributeId === sourceAttributeId),
-      );
+      // N-ary relationships are identified by their participant set, not the
+      // binary pair — skip pair-based duplicate/unmapped reuse for them.
+      const duplicate = participantSpecs
+        ? undefined
+        : Object.values(project.model.relationships).find(
+            (relationship) =>
+              (relationship.sourceEntityId === sourceEntityId &&
+                relationship.targetEntityId === targetEntityId &&
+                relationship.sourceAttributeId === sourceAttributeId &&
+                relationship.targetAttributeId === targetAttributeId) ||
+              (relationship.sourceEntityId === targetEntityId &&
+                relationship.targetEntityId === sourceEntityId &&
+                relationship.sourceAttributeId === targetAttributeId &&
+                relationship.targetAttributeId === sourceAttributeId),
+          );
       if (duplicate) {
         set((state) => {
           state.selection = { kind: "relationship", id: duplicate.id };
@@ -1081,7 +1427,7 @@ export const useProjectStore = create<ProjectStore>()(
       }
 
       const unmappedRelationship =
-        sourceAttributeId || targetAttributeId
+        !participantSpecs && (sourceAttributeId || targetAttributeId)
           ? Object.values(project.model.relationships).find(
               (relationship) =>
                 relationship.sourceAttributeId === null &&
@@ -1112,9 +1458,16 @@ export const useProjectStore = create<ProjectStore>()(
       }
 
       const id = relationshipId ?? createId("relationship");
+      const participants = participantSpecs?.map((spec) => ({
+        id: createId("participant"),
+        entityId: spec.entityId,
+        attributeId: spec.attributeId ?? null,
+        role: spec.role ?? "",
+        cardinality: spec.cardinality ?? "zero-or-many",
+      }));
       set((state) => {
         recordHistory(state, before, "Add relationship");
-        state.project.model.relationships[id] = {
+        const relationship: Relationship = {
           id,
           name: initial.name ?? "",
           description: initial.description ?? "",
@@ -1129,6 +1482,20 @@ export const useProjectStore = create<ProjectStore>()(
           targetCardinality: initial.targetCardinality ?? "zero-or-many",
           isIdentifying: initial.isIdentifying ?? false,
         };
+        if (participants) {
+          relationship.participants = participants;
+          // Keep the binary projection consistent for name-based lookups.
+          const [first, second] = participants;
+          relationship.sourceEntityId = first.entityId;
+          relationship.sourceAttributeId = first.attributeId;
+          relationship.sourceRole = first.role;
+          relationship.sourceCardinality = first.cardinality;
+          relationship.targetEntityId = second.entityId;
+          relationship.targetAttributeId = second.attributeId;
+          relationship.targetRole = second.role;
+          relationship.targetCardinality = second.cardinality;
+        }
+        state.project.model.relationships[id] = relationship;
         state.selection = { kind: "relationship", id };
         touchProject(state);
       });
@@ -1181,6 +1548,27 @@ export const useProjectStore = create<ProjectStore>()(
         );
         const relationship = state.project.model.relationships[relationshipId];
         Object.assign(relationship, changes);
+        // For n-ary relationships the binary fields are a projection of the
+        // first two participants — route edits back onto them.
+        if (relationship.participants?.length && relationship.participants[0]) {
+          const [first, second] = relationship.participants;
+          if (changes.sourceEntityId !== undefined)
+            first.entityId = changes.sourceEntityId;
+          if (changes.sourceAttributeId !== undefined)
+            first.attributeId = changes.sourceAttributeId;
+          if (changes.sourceRole !== undefined) first.role = changes.sourceRole;
+          if (changes.sourceCardinality !== undefined)
+            first.cardinality = changes.sourceCardinality;
+          if (second) {
+            if (changes.targetEntityId !== undefined)
+              second.entityId = changes.targetEntityId;
+            if (changes.targetAttributeId !== undefined)
+              second.attributeId = changes.targetAttributeId;
+            if (changes.targetRole !== undefined) second.role = changes.targetRole;
+            if (changes.targetCardinality !== undefined)
+              second.cardinality = changes.targetCardinality;
+          }
+        }
         const sourceEntity = state.project.model.entities[relationship.sourceEntityId];
         const targetEntity = state.project.model.entities[relationship.targetEntityId];
         if (
@@ -1218,6 +1606,74 @@ export const useProjectStore = create<ProjectStore>()(
       });
     },
 
+    setRelationshipParticipants: (relationshipId, participantSpecs) => {
+      const project = get().project;
+      const relationship = project.model.relationships[relationshipId];
+      if (!relationship || relationship.kind !== "association") return false;
+      const specs = participantSpecs ?? [];
+      if (
+        specs.some(
+          (spec) =>
+            !project.model.entities[spec.entityId] ||
+            (spec.attributeId &&
+              !project.model.entities[spec.entityId].attributes.some(
+                (attribute) => attribute.id === spec.attributeId,
+              )),
+        )
+      ) {
+        return false;
+      }
+      const before = get();
+      set((state) => {
+        recordHistory(state, before, "Edit participants");
+        const target = state.project.model.relationships[relationshipId];
+        if (!target) return;
+        const resolved = specs.map((spec) => ({
+          id: spec.id ?? createId("participant"),
+          entityId: spec.entityId,
+          attributeId: spec.attributeId ?? null,
+          role: spec.role ?? "",
+          cardinality: spec.cardinality ?? "zero-or-many",
+        }));
+        if (resolved.length >= 3) {
+          target.participants = resolved;
+          syncBinaryProjection(target);
+        } else if (resolved.length === 2) {
+          target.participants = resolved;
+          collapseToBinary(target);
+        } else {
+          delete target.participants;
+        }
+        touchProject(state);
+      });
+      return true;
+    },
+
+    updateRelationshipHub: (diagramId, relationshipId, position) => {
+      const diagram = get().project.diagrams[diagramId];
+      if (!diagram || !get().project.model.relationships[relationshipId]) return;
+      const before = get();
+      set((state) => {
+        recordHistory(
+          state,
+          before,
+          "Move relationship hub",
+          `move-hub:${diagramId}:${relationshipId}`,
+        );
+        const view =
+          state.project.diagrams[diagramId].relationshipViews[relationshipId] ??
+          (state.project.diagrams[diagramId].relationshipViews[relationshipId] = {
+            vertices: [],
+          });
+        if (position) {
+          view.hub = { x: Math.round(position.x), y: Math.round(position.y) };
+        } else {
+          delete view.hub;
+        }
+        touchProject(state);
+      });
+    },
+
     updateEntityPosition: (diagramId, entityId, position) => {
       const current = get();
       const view = current.project.diagrams[diagramId]?.entityViews[entityId];
@@ -1226,8 +1682,18 @@ export const useProjectStore = create<ProjectStore>()(
       set((state) => {
         recordHistory(state, before, "Move entity", `move:${diagramId}:${entityId}`);
         const target = state.project.diagrams[diagramId].entityViews[entityId];
+        const dx = Math.round(position.x) - target.x;
+        const dy = Math.round(position.y) - target.y;
         target.x = Math.round(position.x);
         target.y = Math.round(position.y);
+        if (dx !== 0 || dy !== 0) {
+          Object.values(state.project.diagrams[diagramId].notes).forEach((note) => {
+            if (note.entityId === entityId) {
+              note.x += dx;
+              note.y += dy;
+            }
+          });
+        }
         touchProject(state);
       });
     },
@@ -1241,8 +1707,18 @@ export const useProjectStore = create<ProjectStore>()(
         Object.entries(positions).forEach(([entityId, position]) => {
           const view = diagram.entityViews[entityId];
           if (!view || view.pinned) return;
+          const dx = Math.round(position.x) - view.x;
+          const dy = Math.round(position.y) - view.y;
           view.x = Math.round(position.x);
           view.y = Math.round(position.y);
+          if (dx !== 0 || dy !== 0) {
+            Object.values(diagram.notes).forEach((note) => {
+              if (note.entityId === entityId) {
+                note.x += dx;
+                note.y += dy;
+              }
+            });
+          }
         });
         touchProject(state);
       });
@@ -1295,21 +1771,23 @@ export const useProjectStore = create<ProjectStore>()(
       });
     },
 
-    addDiagramNote: (diagramId, position) => {
+    addDiagramNote: (diagramId, position, entityId) => {
       const noteId = createId("note");
       const before = get();
       set((state) => {
         const diagram = state.project.diagrams[diagramId];
         if (!diagram) return;
-        recordHistory(state, before, "Add note");
+        recordHistory(state, before, entityId ? "Add comment" : "Add note");
+        const view = entityId ? diagram.entityViews[entityId] : undefined;
         diagram.notes[noteId] = {
           id: noteId,
-          text: "New note",
-          x: position?.x ?? 120,
-          y: position?.y ?? 100,
-          width: 220,
-          height: 100,
+          text: "",
+          x: position?.x ?? (view ? view.x + 300 : 120),
+          y: position?.y ?? (view ? view.y - 24 : 100),
+          width: 200,
+          height: 90,
           color: "#fff4c2",
+          ...(entityId && state.project.model.entities[entityId] ? { entityId } : {}),
         };
         state.selection = { kind: "note", id: noteId };
         touchProject(state);
@@ -1400,6 +1878,40 @@ export const useProjectStore = create<ProjectStore>()(
         }
         touchProject(state);
       });
+    },
+
+    applyComparisonMerge: (comparison, differences) => {
+      const before = get();
+      const result = mergeDifferences(
+        before.project,
+        comparison,
+        differences,
+        before.activeDiagramId,
+      );
+      if (result.applied === 0) return result;
+      set((state) => {
+        recordHistory(
+          state,
+          before,
+          `Merge ${result.applied} change${result.applied === 1 ? "" : "s"}`,
+        );
+        state.project = result.project;
+        const selection = state.selection;
+        if (
+          selection?.kind === "entity" &&
+          !state.project.model.entities[selection.id]
+        ) {
+          state.selection = null;
+        }
+        if (
+          selection?.kind === "relationship" &&
+          !state.project.model.relationships[selection.id]
+        ) {
+          state.selection = null;
+        }
+        touchProject(state);
+      });
+      return result;
     },
 
     deleteSelection: () => {

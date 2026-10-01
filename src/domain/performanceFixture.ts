@@ -47,6 +47,7 @@ export function createPerformanceFixture(
           attributeIds: [identifierAttributeId],
         },
       ],
+      inversionEntries: [],
     };
     entityViews[entityId] = {
       x: 64 + (index % 10) * 320,

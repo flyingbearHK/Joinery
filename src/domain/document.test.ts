@@ -57,6 +57,137 @@ describe(".joinery document format", () => {
     expect(Object.values(restored.diagrams)[0].notes).toEqual({});
   });
 
+  it("round-trips exact-N cardinality and rejects malformed values", () => {
+    const project = structuredClone(createSampleProject());
+    const relationship = Object.values(project.model.relationships)[0];
+    relationship.sourceCardinality = "exactly-3";
+
+    const restored = deserializeProject(serializeProject(project));
+    expect(Object.values(restored.model.relationships)[0].sourceCardinality).toBe(
+      "exactly-3",
+    );
+
+    relationship.sourceCardinality = "exactly-0" as never;
+    expect(() => validateProject(project)).toThrow();
+    relationship.sourceCardinality = "exactly-1.5" as never;
+    expect(() => validateProject(project)).toThrow();
+  });
+
+  it("round-trips n-ary relationships and validates participant references", () => {
+    const project = structuredClone(createSampleProject());
+    const entities = Object.values(project.model.entities);
+    const [customer, order, product] = [
+      entities.find((entity) => entity.name === "Customer")!,
+      entities.find((entity) => entity.name === "Order")!,
+      entities.find((entity) => entity.name === "Product")!,
+    ];
+    project.model.relationships.relationship_nary = {
+      id: "relationship_nary",
+      name: "fulfills",
+      description: "A ternary supply fact.",
+      kind: "association",
+      sourceRole: "",
+      targetRole: "",
+      sourceEntityId: customer.id,
+      targetEntityId: order.id,
+      sourceAttributeId: null,
+      targetAttributeId: null,
+      sourceCardinality: "exactly-one",
+      targetCardinality: "zero-or-many",
+      isIdentifying: false,
+      participants: [
+        {
+          id: "p1",
+          entityId: customer.id,
+          attributeId: null,
+          role: "buyer",
+          cardinality: "exactly-one",
+        },
+        {
+          id: "p2",
+          entityId: order.id,
+          attributeId: null,
+          role: "",
+          cardinality: "exactly-4",
+        },
+        {
+          id: "p3",
+          entityId: product.id,
+          attributeId: null,
+          role: "",
+          cardinality: "one-or-many",
+        },
+      ],
+    };
+
+    const restored = deserializeProject(serializeProject(project));
+    const nary = restored.model.relationships.relationship_nary;
+    expect(nary.participants).toHaveLength(3);
+    expect(nary.participants?.[1].cardinality).toBe("exactly-4");
+    expect(nary.participants?.[0].role).toBe("buyer");
+
+    // Two participants is a binary relationship — the field must not be used.
+    project.model.relationships.relationship_nary.participants =
+      project.model.relationships.relationship_nary.participants!.slice(0, 2);
+    expect(() => validateProject(project)).toThrow();
+
+    // Missing entity references must be rejected.
+    project.model.relationships.relationship_nary.participants = [
+      {
+        id: "p1",
+        entityId: customer.id,
+        attributeId: null,
+        role: "",
+        cardinality: "exactly-one",
+      },
+      {
+        id: "p2",
+        entityId: order.id,
+        attributeId: null,
+        role: "",
+        cardinality: "zero-or-many",
+      },
+      {
+        id: "p3",
+        entityId: "entity_missing",
+        attributeId: null,
+        role: "",
+        cardinality: "zero-or-many",
+      },
+    ];
+    expect(() => validateProject(project)).toThrow(/missing entity/i);
+
+    // Participants are not allowed on inheritance relationships.
+    project.model.relationships.relationship_nary.participants![2].entityId =
+      product.id;
+    project.model.relationships.relationship_nary.kind = "inheritance";
+    expect(() => validateProject(project)).toThrow(/participant/i);
+  });
+
+  it("round-trips attached comments and rejects notes pointing at missing entities", () => {
+    const project = createSampleProject();
+    const diagram = Object.values(project.diagrams)[0];
+    const entity = Object.values(project.model.entities)[0];
+    diagram.notes["note-1"] = {
+      id: "note-1",
+      text: "Rename after review",
+      x: 40,
+      y: 40,
+      width: 200,
+      height: 90,
+      color: "#fff4c2",
+      entityId: entity.id,
+    };
+
+    const restored = deserializeProject(serializeProject(project));
+    expect(Object.values(Object.values(restored.diagrams)[0].notes)[0].entityId).toBe(
+      entity.id,
+    );
+
+    project.diagrams[diagram.id].notes["note-1"].entityId = "entity_missing";
+    expect(() => validateProject(project)).toThrow();
+  });
+
   it("rejects relationships that reference a missing entity", () => {
     const project = structuredClone(createSampleProject());
     const relationship = Object.values(project.model.relationships)[0];

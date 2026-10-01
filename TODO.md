@@ -19,12 +19,20 @@ Priorities are ordered. A checked item has automated coverage or was exercised a
 - [x] Relationship reconnection validation and duplicate prevention.
 - [x] Recursive associations and subtype/supertype relationships.
 - [x] Relationship role names, identifying semantics, and Crow's Foot cardinality.
+- [x] Exact-N endpoint cardinality ("exactly N") across model, diagram labels, document format, and Mermaid/drawio metadata round-trips.
+- [x] N-ary relationships (three or more participants) rendered as a labelled hub with one leg per participant, with per-participant role, cardinality, and attribute mapping.
+- [x] Inversion entries — named non-identifying access paths per entity, editable in the inspector and included in comparison.
+- [x] Selective merge in model comparison: per-difference selection, removal confirmation, single undoable apply, and applied/skipped reporting.
+- [x] Editable bulk-import staging grid: inline name/type/description edits, PK and Required flags, per-row entity references that create identifying relationships, bulk "type for all", manual add/remove rows, and duplicate/existing-name warnings.
+- [x] Entity-attached comments — sticky notes anchored to an entity via `DiagramNote.entityId`; they follow entity moves, hide with the entity, delete with it, show a dashed connector, and round-trip through drawio metadata.
+- [x] Fast attribute ordering — drag-to-reorder grip, Shift-click to top/bottom, and an "Arrange" menu (keys & FKs first, A–Z) that applies one undoable `reorderAttributes` permutation; staged bulk-import rows reorder before commit.
 - [x] Attribute-to-attribute endpoint mapping.
 - [x] Diagram rename, delete, duplicate, and entity visibility management.
 - [x] Multiple independent diagrams over one canonical model.
 - [x] Pin/unpin entities and preserve pinned positions during automatic layout.
 - [x] Primary, alternate, and composite identifiers.
 - [x] Attribute reordering and keyboard-first row insertion.
+- [x] Bulk attribute import from pasted spreadsheet/CSV/list text with column mapping and preview.
 - [x] Editable project, entity, attribute, relationship, and diagram definitions.
 - [x] Reusable custom logical type/domain library.
 - [x] Model naming standards and required-definition validation options.
@@ -50,6 +58,8 @@ Priorities are ordered. A checked item has automated coverage or was exercised a
 - [x] A4/A3 portrait and landscape PDF fitting.
 - [x] Multi-page tiled A4 PDF output for large diagrams.
 - [x] Live export preview, progress state, and error handling.
+- [x] Mermaid `erDiagram` export and import, with metadata comments preserving names, colors, descriptions, roles, and relationship kinds.
+- [x] drawio (`.drawio`) export with one page per diagram and ER arrow markers; best-effort drawio import recognizing ER table shapes and Joinery-exported files (compressed and uncompressed pages).
 
 ## Performance and quality
 

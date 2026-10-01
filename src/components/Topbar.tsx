@@ -6,6 +6,7 @@ import {
   FileText,
   GitCompareArrows,
   FolderOpen,
+  Import,
   Library,
   Link2,
   LoaderCircle,
@@ -37,6 +38,7 @@ interface TopbarProps {
   onToggleTheme: () => void;
   onNewProject: () => void;
   onOpenProject: () => void;
+  onImportModel: () => void;
   onSaveProject: () => void;
   canUndo: boolean;
   canRedo: boolean;
@@ -86,6 +88,7 @@ export function Topbar({
   onToggleTheme,
   onNewProject,
   onOpenProject,
+  onImportModel,
   onSaveProject,
   canUndo,
   canRedo,
@@ -145,6 +148,16 @@ export function Topbar({
             onClick={onOpenProject}
           >
             <FolderOpen size={15} />
+          </button>
+          <button
+            type="button"
+            className="topbar-icon-button"
+            title="Import model (Mermaid, drawio)"
+            aria-label="Import model"
+            disabled={fileActionsDisabled}
+            onClick={onImportModel}
+          >
+            <Import size={15} />
           </button>
           <button
             type="button"

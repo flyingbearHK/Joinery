@@ -8,11 +8,9 @@ import {
 const idSchema = z.string().trim().min(1).max(240);
 const textSchema = z.string().max(100_000);
 const dateTimeSchema = z.iso.datetime({ offset: true });
-const cardinalitySchema = z.enum([
-  "zero-or-one",
-  "exactly-one",
-  "zero-or-many",
-  "one-or-many",
+const cardinalitySchema = z.union([
+  z.enum(["zero-or-one", "exactly-one", "zero-or-many", "one-or-many"]),
+  z.string().regex(/^exactly-[1-9]\d{0,5}$/),
 ]);
 
 const attributeSchema = z
@@ -35,6 +33,15 @@ const identifierSchema = z
   })
   .strict();
 
+const inversionEntrySchema = z
+  .object({
+    id: idSchema,
+    name: z.string().max(500),
+    description: textSchema.optional().default(""),
+    attributeIds: z.array(idSchema).min(1).max(1_000),
+  })
+  .strict();
+
 const entitySchema = z
   .object({
     id: idSchema,
@@ -43,6 +50,17 @@ const entitySchema = z
     color: z.string().max(100).optional().default("#29243d"),
     attributes: z.array(attributeSchema).max(10_000),
     identifiers: z.array(identifierSchema).max(1_000).optional().default([]),
+    inversionEntries: z.array(inversionEntrySchema).max(1_000).optional().default([]),
+  })
+  .strict();
+
+const relationshipParticipantSchema = z
+  .object({
+    id: idSchema,
+    entityId: idSchema,
+    attributeId: idSchema.nullable().optional().default(null),
+    role: z.string().max(500).optional().default(""),
+    cardinality: cardinalitySchema,
   })
   .strict();
 
@@ -61,6 +79,7 @@ const relationshipSchema = z
     sourceCardinality: cardinalitySchema,
     targetCardinality: cardinalitySchema,
     isIdentifying: z.boolean(),
+    participants: z.array(relationshipParticipantSchema).min(3).max(100).optional(),
   })
   .strict();
 
@@ -77,7 +96,10 @@ const pointSchema = z
   .object({ x: z.number().finite(), y: z.number().finite() })
   .strict();
 const relationshipViewSchema = z
-  .object({ vertices: z.array(pointSchema).max(10_000) })
+  .object({
+    vertices: z.array(pointSchema).max(10_000),
+    hub: pointSchema.optional(),
+  })
   .strict();
 const diagramNoteSchema = z
   .object({
@@ -88,6 +110,7 @@ const diagramNoteSchema = z
     width: z.number().positive().max(10_000),
     height: z.number().positive().max(10_000),
     color: z.string().max(100),
+    entityId: idSchema.optional(),
   })
   .strict();
 const subjectAreaSchema = z
@@ -348,6 +371,29 @@ function assertSemanticIntegrity(project: JoineryProject): void {
         `Entity “${entity.name || entity.id}” has more than one primary identifier.`,
       );
     }
+
+    const inversionEntryIds = new Set<string>();
+    for (const entry of entity.inversionEntries) {
+      if (inversionEntryIds.has(entry.id)) {
+        throw new ProjectDocumentError(
+          "invalid-document",
+          `Entity “${entity.name || entity.id}” contains duplicate inversion entry ID “${entry.id}”.`,
+        );
+      }
+      inversionEntryIds.add(entry.id);
+      if (entry.attributeIds.some((attributeId) => !attributeIds.has(attributeId))) {
+        throw new ProjectDocumentError(
+          "invalid-document",
+          `Inversion entry “${entry.name || entry.id}” references a missing attribute.`,
+        );
+      }
+      if (new Set(entry.attributeIds).size !== entry.attributeIds.length) {
+        throw new ProjectDocumentError(
+          "invalid-document",
+          `Inversion entry “${entry.name || entry.id}” contains a duplicate attribute.`,
+        );
+      }
+    }
   }
 
   for (const [logicalTypeId, logicalType] of Object.entries(
@@ -403,6 +449,42 @@ function assertSemanticIntegrity(project: JoineryProject): void {
         `Relationship “${relationship.name || relationship.id}” references a missing target attribute.`,
       );
     }
+    if (relationship.participants && relationship.participants.length > 0) {
+      if (relationship.kind !== "association") {
+        throw new ProjectDocumentError(
+          "invalid-document",
+          `Relationship “${relationship.name || relationship.id}” has participants but is not an association.`,
+        );
+      }
+      const participantIds = new Set<string>();
+      for (const participant of relationship.participants) {
+        if (participantIds.has(participant.id)) {
+          throw new ProjectDocumentError(
+            "invalid-document",
+            `Relationship “${relationship.name || relationship.id}” has a duplicate participant ID.`,
+          );
+        }
+        participantIds.add(participant.id);
+        const participantEntity = project.model.entities[participant.entityId];
+        if (!participantEntity) {
+          throw new ProjectDocumentError(
+            "invalid-document",
+            `Relationship “${relationship.name || relationship.id}” participant references a missing entity.`,
+          );
+        }
+        if (
+          participant.attributeId &&
+          !participantEntity.attributes.some(
+            (attribute) => attribute.id === participant.attributeId,
+          )
+        ) {
+          throw new ProjectDocumentError(
+            "invalid-document",
+            `Relationship “${relationship.name || relationship.id}” participant references a missing attribute.`,
+          );
+        }
+      }
+    }
   }
 
   for (const [diagramId, diagram] of Object.entries(project.diagrams)) {
@@ -425,6 +507,12 @@ function assertSemanticIntegrity(project: JoineryProject): void {
         throw new ProjectDocumentError(
           "invalid-document",
           `Diagram note record “${noteId}” has a mismatched ID.`,
+        );
+      }
+      if (note.entityId && !entityIds.has(note.entityId)) {
+        throw new ProjectDocumentError(
+          "invalid-document",
+          `Diagram note “${note.id}” is attached to missing entity “${note.entityId}”.`,
         );
       }
     }

@@ -94,17 +94,36 @@ export async function calculateAutoLayout(
     };
   });
 
-  const edges: ElkExtendedEdge[] = Object.values(project.model.relationships)
-    .filter(
-      (relationship) =>
-        movableEntityIds.has(relationship.sourceEntityId) &&
-        movableEntityIds.has(relationship.targetEntityId),
-    )
-    .map((relationship) => ({
-      id: relationship.id,
-      sources: [relationship.sourceEntityId],
-      targets: [relationship.targetEntityId],
-    }));
+  // N-ary relationships feed ELK a star of binary edges toward the first
+  // participant so all involved entities stay clustered.
+  const edges: ElkExtendedEdge[] = Object.values(project.model.relationships).flatMap(
+    (relationship) => {
+      if (relationship.participants?.length) {
+        const [first, ...rest] = relationship.participants;
+        return rest
+          .filter(
+            (participant) =>
+              movableEntityIds.has(participant.entityId) &&
+              movableEntityIds.has(first.entityId),
+          )
+          .map((participant, index) => ({
+            id: `${relationship.id}#${index}`,
+            sources: [participant.entityId],
+            targets: [first.entityId],
+          }));
+      }
+      return movableEntityIds.has(relationship.sourceEntityId) &&
+        movableEntityIds.has(relationship.targetEntityId)
+        ? [
+            {
+              id: relationship.id,
+              sources: [relationship.sourceEntityId],
+              targets: [relationship.targetEntityId],
+            },
+          ]
+        : [];
+    },
+  );
 
   const elk = await getElk();
   const result = await elk.layout({

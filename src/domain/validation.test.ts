@@ -13,6 +13,7 @@ describe("logical model validation", () => {
       color: "#29243d",
       attributes: [],
       identifiers: [],
+      inversionEntries: [],
     };
     diagram.entityViews.entity_one = {
       x: 0,

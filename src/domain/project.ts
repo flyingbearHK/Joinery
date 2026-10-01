@@ -44,6 +44,7 @@ export function createEntity(name = "New entity"): Entity {
     color: "#6d4bb9",
     attributes: [],
     identifiers: [],
+    inversionEntries: [],
   };
 }
 
@@ -133,6 +134,14 @@ export function createSampleProject(): JoineryProject {
           attributeIds: [id("attribute", "customer_id")],
         },
       ],
+      inversionEntries: [
+        {
+          id: id("inversion_entry", "customer_by_email"),
+          name: "By email",
+          description: "Look up a customer by contact email.",
+          attributeIds: [id("attribute", "customer_email")],
+        },
+      ],
     },
     [orderId]: {
       id: orderId,
@@ -173,6 +182,7 @@ export function createSampleProject(): JoineryProject {
           attributeIds: [id("attribute", "order_id")],
         },
       ],
+      inversionEntries: [],
     },
     [lineItemId]: {
       id: lineItemId,
@@ -213,6 +223,7 @@ export function createSampleProject(): JoineryProject {
           attributeIds: [id("attribute", "line_item_number")],
         },
       ],
+      inversionEntries: [],
     },
     [productId]: {
       id: productId,
@@ -253,6 +264,7 @@ export function createSampleProject(): JoineryProject {
           attributeIds: [id("attribute", "product_id")],
         },
       ],
+      inversionEntries: [],
     },
   };
 

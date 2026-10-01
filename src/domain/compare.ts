@@ -8,9 +8,16 @@ export interface ModelDifference {
   category: "project" | "entity" | "attribute" | "relationship" | "logical-type";
   title: string;
   detail: string;
+  /** Normalized logical names that locate the differing object, used by merge. */
+  ref?: {
+    entityName?: string;
+    attributeName?: string;
+    relationshipKey?: string;
+    logicalTypeName?: string;
+  };
 }
 
-function normalized(value: string): string {
+export function normalized(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
@@ -29,10 +36,34 @@ function entitySignature(entity: Entity): string {
         )
         .sort(),
     })),
+    inversionEntries: entity.inversionEntries.map((entry) => ({
+      name: entry.name,
+      attributes: entry.attributeIds
+        .map(
+          (attributeId) =>
+            entity.attributes.find((attribute) => attribute.id === attributeId)?.name ??
+            attributeId,
+        )
+        .sort(),
+    })),
   });
 }
 
-function relationshipKey(relationship: Relationship, project: JoineryProject): string {
+export function relationshipCompareKey(
+  relationship: Relationship,
+  project: JoineryProject,
+): string {
+  if (relationship.participants?.length) {
+    const participants = relationship.participants
+      .map((participant) =>
+        normalized(
+          project.model.entities[participant.entityId]?.name ?? participant.entityId,
+        ),
+      )
+      .sort()
+      .join("+");
+    return `nary:${participants}|${normalized(relationship.name)}`;
+  }
   const source = normalized(
     project.model.entities[relationship.sourceEntityId]?.name ??
       relationship.sourceEntityId,
@@ -42,6 +73,29 @@ function relationshipKey(relationship: Relationship, project: JoineryProject): s
       relationship.targetEntityId,
   );
   return `${source}|${target}|${normalized(relationship.name)}`;
+}
+
+function participantsSignature(
+  relationship: Relationship,
+  project: JoineryProject,
+): string {
+  if (!relationship.participants?.length) return "";
+  return JSON.stringify(
+    relationship.participants.map((participant) => ({
+      entity: normalized(
+        project.model.entities[participant.entityId]?.name ?? participant.entityId,
+      ),
+      attribute: participant.attributeId
+        ? normalized(
+            project.model.entities[participant.entityId]?.attributes.find(
+              (attribute) => attribute.id === participant.attributeId,
+            )?.name ?? participant.attributeId,
+          )
+        : null,
+      role: normalized(participant.role),
+      cardinality: participant.cardinality,
+    })),
+  );
 }
 
 export function compareProjects(
@@ -80,6 +134,7 @@ export function compareProjects(
         category: "entity",
         title: `Entity added: ${entity.name}`,
         detail: "Exists only in the comparison model.",
+        ref: { entityName: key },
       });
       return;
     }
@@ -89,7 +144,8 @@ export function compareProjects(
         kind: "changed",
         category: "entity",
         title: `Entity changed: ${entity.name}`,
-        detail: "Description, color, or identifiers differ.",
+        detail: "Description, color, identifiers, or inversion entries differ.",
+        ref: { entityName: key },
       });
     }
 
@@ -108,6 +164,7 @@ export function compareProjects(
           category: "attribute",
           title: `${entity.name}.${attribute.name} added`,
           detail: "Attribute exists only in the comparison model.",
+          ref: { entityName: key, attributeName: attributeKey },
         });
       } else if (
         currentAttribute.logicalType !== attribute.logicalType ||
@@ -120,6 +177,7 @@ export function compareProjects(
           category: "attribute",
           title: `${entity.name}.${attribute.name} changed`,
           detail: "Logical type, optionality, or description differs.",
+          ref: { entityName: key, attributeName: attributeKey },
         });
       }
     });
@@ -131,6 +189,7 @@ export function compareProjects(
           category: "attribute",
           title: `${existing.name}.${attribute.name} removed`,
           detail: "Attribute exists only in the current model.",
+          ref: { entityName: key, attributeName: attributeKey },
         });
       }
     });
@@ -144,6 +203,7 @@ export function compareProjects(
         category: "entity",
         title: `Entity removed: ${entity.name}`,
         detail: "Exists only in the current model.",
+        ref: { entityName: key },
       });
     }
   });
@@ -169,6 +229,7 @@ export function compareProjects(
         category: "logical-type",
         title: `Logical type added: ${logicalType.name}`,
         detail: "Exists only in the comparison model.",
+        ref: { logicalTypeName: key },
       });
     } else if (
       existing.baseType !== logicalType.baseType ||
@@ -181,6 +242,7 @@ export function compareProjects(
         category: "logical-type",
         title: `Logical type changed: ${logicalType.name}`,
         detail: "Base type, format, or description differs.",
+        ref: { logicalTypeName: key },
       });
     }
   });
@@ -192,19 +254,20 @@ export function compareProjects(
         category: "logical-type",
         title: `Logical type removed: ${logicalType.name}`,
         detail: "Exists only in the current model.",
+        ref: { logicalTypeName: key },
       });
     }
   });
 
   const currentRelationships = new Map(
     Object.values(current.model.relationships).map((relationship) => [
-      relationshipKey(relationship, current),
+      relationshipCompareKey(relationship, current),
       relationship,
     ]),
   );
   const comparisonRelationships = new Map(
     Object.values(comparison.model.relationships).map((relationship) => [
-      relationshipKey(relationship, comparison),
+      relationshipCompareKey(relationship, comparison),
       relationship,
     ]),
   );
@@ -217,6 +280,7 @@ export function compareProjects(
         category: "relationship",
         title: `Relationship added: ${relationship.name || key}`,
         detail: "Exists only in the comparison model.",
+        ref: { relationshipKey: key },
       });
     } else if (
       existing.kind !== relationship.kind ||
@@ -224,7 +288,9 @@ export function compareProjects(
       existing.targetRole !== relationship.targetRole ||
       existing.sourceCardinality !== relationship.sourceCardinality ||
       existing.targetCardinality !== relationship.targetCardinality ||
-      existing.isIdentifying !== relationship.isIdentifying
+      existing.isIdentifying !== relationship.isIdentifying ||
+      participantsSignature(existing, current) !==
+        participantsSignature(relationship, comparison)
     ) {
       differences.push({
         id: `relationship-changed-${existing.id}`,
@@ -232,6 +298,7 @@ export function compareProjects(
         category: "relationship",
         title: `Relationship changed: ${relationship.name || key}`,
         detail: "Type, role names, cardinality, or identifying semantics differ.",
+        ref: { relationshipKey: key },
       });
     }
   });
@@ -243,6 +310,7 @@ export function compareProjects(
         category: "relationship",
         title: `Relationship removed: ${relationship.name || key}`,
         detail: "Exists only in the current model.",
+        ref: { relationshipKey: key },
       });
     }
   });

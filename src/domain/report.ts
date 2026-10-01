@@ -1,3 +1,4 @@
+import { cardinalityLabel } from "./model";
 import type { JoineryProject } from "./model";
 
 function escapeHtml(value: string): string {
@@ -22,6 +23,7 @@ export function createModelCsv(project: JoineryProject): string {
       "Logical type",
       "Required",
       "Identifiers",
+      "Access paths",
       "Attribute description",
     ],
   ];
@@ -34,6 +36,10 @@ export function createModelCsv(project: JoineryProject): string {
           .filter((identifier) => identifier.attributeIds.includes(attribute.id))
           .map((identifier) => `${identifier.kind}: ${identifier.name}`)
           .join("; ");
+        const accessPaths = entity.inversionEntries
+          .filter((entry) => entry.attributeIds.includes(attribute.id))
+          .map((entry) => entry.name)
+          .join("; ");
         rows.push([
           entity.name,
           entity.description,
@@ -41,11 +47,12 @@ export function createModelCsv(project: JoineryProject): string {
           attribute.logicalType,
           attribute.isRequired ? "Yes" : "No",
           identifiers,
+          accessPaths,
           attribute.description,
         ]);
       });
       if (entity.attributes.length === 0) {
-        rows.push([entity.name, entity.description, "", "", "", "", ""]);
+        rows.push([entity.name, entity.description, "", "", "", "", "", ""]);
       }
     });
 
@@ -69,16 +76,22 @@ export function createModelHtmlReport(project: JoineryProject): string {
               identifier.kind === "primary" ? "Primary" : identifier.name,
             )
             .join(", ");
+          const accessPaths = entity.inversionEntries
+            .filter((entry) => entry.attributeIds.includes(attribute.id))
+            .map((entry) => entry.name)
+            .join(", ");
           return `<tr><td>${escapeHtml(attribute.name)}</td><td>${escapeHtml(
             attribute.logicalType,
           )}</td><td>${attribute.isRequired ? "Yes" : "No"}</td><td>${escapeHtml(
             identifiers,
-          )}</td><td>${escapeHtml(attribute.description)}</td></tr>`;
+          )}</td><td>${escapeHtml(accessPaths)}</td><td>${escapeHtml(
+            attribute.description,
+          )}</td></tr>`;
         })
         .join("");
       return `<section><h2>${escapeHtml(entity.name)}</h2><p>${escapeHtml(
         entity.description,
-      )}</p><table><thead><tr><th>Attribute</th><th>Logical type</th><th>Required</th><th>Identifier</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+      )}</p><table><thead><tr><th>Attribute</th><th>Logical type</th><th>Required</th><th>Identifier</th><th>Access paths</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table></section>`;
     })
     .join("\n");
 
@@ -96,16 +109,35 @@ export function createModelHtmlReport(project: JoineryProject): string {
 
   const relationshipRows = relationships
     .map((relationship) => {
+      if (relationship.participants?.length) {
+        const summary = relationship.participants
+          .map((participant) => {
+            const entityName =
+              project.model.entities[participant.entityId]?.name ?? "Missing";
+            const role = participant.role ? ` as ${participant.role}` : "";
+            return `${entityName}${role} (${cardinalityLabel(
+              participant.cardinality,
+            )})`;
+          })
+          .join(", ");
+        return `<tr><td>${escapeHtml(relationship.name || "—")}</td><td>${escapeHtml(
+          `${relationship.kind} (n-ary)`,
+        )}</td><td colspan="6">${escapeHtml(
+          summary,
+        )}</td><td>${relationship.isIdentifying ? "Yes" : "No"}</td></tr>`;
+      }
       const source = project.model.entities[relationship.sourceEntityId];
       const target = project.model.entities[relationship.targetEntityId];
       return `<tr><td>${escapeHtml(relationship.name || "—")}</td><td>${escapeHtml(
         relationship.kind,
       )}</td><td>${escapeHtml(source?.name ?? "Missing entity")}</td><td>${escapeHtml(
         relationship.sourceRole,
-      )}</td><td>${escapeHtml(relationship.sourceCardinality)}</td><td>${escapeHtml(
+      )}</td><td>${escapeHtml(
+        cardinalityLabel(relationship.sourceCardinality),
+      )}</td><td>${escapeHtml(
         target?.name ?? "Missing entity",
       )}</td><td>${escapeHtml(relationship.targetRole)}</td><td>${escapeHtml(
-        relationship.targetCardinality,
+        cardinalityLabel(relationship.targetCardinality),
       )}</td><td>${relationship.isIdentifying ? "Yes" : "No"}</td></tr>`;
     })
     .join("");

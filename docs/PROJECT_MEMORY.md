@@ -52,6 +52,11 @@ Confirmed constraints remain:
 - PDF uses `svg2pdf` and remains vector-based.
 - PDF supports content-sized pages, A4/A3 portrait and landscape fitting, and tiled A4 landscape pages.
 - White and transparent diagram backgrounds are supported.
+- Mermaid `erDiagram` (.mmd) and drawio (.drawio) exports live in `src/domain/mermaid.ts` and `src/domain/drawio.ts` as pure serializers.
+- Mermaid exports emit `%% key: value` comments (name/color/description/roles/kind) so Joinery files re-import without losing model metadata; foreign renderers ignore them. Entity/attribute names and types are sanitized to Mermaid's identifier charset on export.
+- drawio exports are uncompressed mxfile XML with `joineryKind`/`joineryName`/URI-encoded `joinery*` style keys for deterministic re-import, plus `entityRelationEdgeStyle` edges with `ERone`/`ERzeroToOne`/`ERzeroToMany`/`ERoneToMany` arrows.
+- drawio import is best-effort by design: it recognizes `shape=table` entities, `partialRectangle` attribute rows, ER-arrow edges, notes, and subject areas in both uncompressed and deflate+base64 compressed pages. Arbitrary drawio art (plain rectangles) is intentionally not reverse-engineered.
+- Importing a model file replaces the current project behind the standard unsaved-changes confirmation and loads it marked dirty so quit/recovery protections apply.
 
 ## Technology decisions
 
@@ -75,6 +80,11 @@ Confirmed constraints remain:
 - Only one primary identifier is allowed per entity; any number of alternate identifiers may exist.
 - Recursive associations are valid; recursive inheritance is rejected.
 - A project always contains at least one diagram.
+- N-ary relationships (3+ participants) store an optional `participants[]` array on association relationships. The binary `source*`/`target*` fields are a maintained projection of participants[0]/[1] so name-based lookups (compare/merge keys) keep working; `isNaryRelationship` and `relationshipParticipants` in `src/domain/model.ts` are the canonical accessors. On canvas, n-ary relationships render as a hub node (`<relId>__hub`) plus one leg edge per participant (`<relId>__leg__<participantId>`); `relationshipIdFromCellId` maps projection cells back to the canonical id. Removing a participant below three collapses the relationship back to binary; entity deletion cascades the same way.
+- Exact-N cardinality serializes as the string `exactly-<N>` inside the `Cardinality` type; formats that cannot express it (Mermaid, drawio) carry the exact value in Joinery metadata so round-trips stay lossless.
+- Inversion entries (`entity.inversionEntries`) are named non-identifying access paths over attribute sets — semantically distinct from identifiers; they never assert uniqueness.
+- Compare merge is selective and single-undo: `mergeDifferences` in `src/domain/merge.ts` maps objects between projects by normalized logical names and remaps IDs on insert.
+- Comments are diagram-level: `DiagramNote.entityId` anchors a note to an entity on that diagram only. The store keeps positions absolute and shifts attached notes by the entity's move delta inside the same history entry; attached notes hide when the entity has no view on the diagram and are deleted with the entity.
 
 ## Persistence and lifecycle
 
@@ -94,6 +104,7 @@ Confirmed constraints remain:
 - Direct attribute-port drawing and an explicit relationship dialog are both supported.
 - Undo/redo operates on canonical model snapshots and merges rapid edits to the same field.
 - Copy/paste and duplicate generate fresh entity, attribute, and identifier IDs.
+- Attributes can be bulk-imported from pasted spreadsheet (TSV), CSV, or plain-list text through a column-mapping editable staging grid; `addAttributes`/`addEntityWithAttributes` keep it a single undoable command, and `referencesEntityId` drafts create identifying relationships in the same history entry. Entity copy marks the system clipboard so plain-text paste can be routed to the importer without breaking entity paste.
 - Light and dark themes are persistent.
 
 ## Build, testing, and distribution

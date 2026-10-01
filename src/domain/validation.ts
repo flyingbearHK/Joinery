@@ -1,4 +1,8 @@
-import type { JoineryProject, ProjectSelection } from "./model";
+import {
+  relationshipParticipants,
+  type JoineryProject,
+  type ProjectSelection,
+} from "./model";
 
 export type ValidationSeverity = "error" | "warning" | "info";
 
@@ -138,6 +142,42 @@ export function validateLogicalModel(project: JoineryProject): ValidationIssue[]
         selection: { kind: "entity", id: entity.id },
       });
     }
+
+    const identifierSets = entity.identifiers.map(
+      (identifier) =>
+        new Set(
+          identifier.attributeIds.map(
+            (attributeId) =>
+              entity.attributes.find((attribute) => attribute.id === attributeId)
+                ?.name ?? attributeId,
+          ),
+        ),
+    );
+    entity.inversionEntries.forEach((entry, index) => {
+      const entrySet = new Set(
+        entry.attributeIds.map(
+          (attributeId) =>
+            entity.attributes.find((attribute) => attribute.id === attributeId)?.name ??
+            attributeId,
+        ),
+      );
+      if (
+        identifierSets.some(
+          (identifierSet) =>
+            identifierSet.size === entrySet.size &&
+            [...identifierSet].every((name) => entrySet.has(name)),
+        )
+      ) {
+        issues.push({
+          id: `inversion-identifier-${entry.id}`,
+          severity: "info",
+          title: `“${entry.name || `Inversion entry ${index + 1}`}” repeats an identifier`,
+          detail:
+            "An identifier already defines that access path — keep the entry only if it documents a different usage.",
+          selection: { kind: "entity", id: entity.id },
+        });
+      }
+    });
   });
 
   entityNames.forEach((entityIds, name) => {
@@ -171,41 +211,35 @@ export function validateLogicalModel(project: JoineryProject): ValidationIssue[]
         selection: { kind: "relationship", id: relationship.id },
       });
     }
-    if (
-      relationship.sourceAttributeId &&
-      relationship.targetAttributeId &&
-      relationship.kind === "association"
-    ) {
-      const sourceAttribute = project.model.entities[
-        relationship.sourceEntityId
-      ]?.attributes.find(
-        (attribute) => attribute.id === relationship.sourceAttributeId,
+    const participants = relationshipParticipants(relationship);
+    const mappedParticipants = participants.filter(
+      (participant) => participant.attributeId,
+    );
+    if (mappedParticipants.length >= 2 && relationship.kind === "association") {
+      const [first, ...rest] = mappedParticipants;
+      const firstAttribute = project.model.entities[first.entityId]?.attributes.find(
+        (attribute) => attribute.id === first.attributeId,
       );
-      const targetAttribute = project.model.entities[
-        relationship.targetEntityId
-      ]?.attributes.find(
-        (attribute) => attribute.id === relationship.targetAttributeId,
-      );
-      if (
-        sourceAttribute &&
-        targetAttribute &&
-        normalized(sourceAttribute.logicalType) !==
-          normalized(targetAttribute.logicalType)
-      ) {
-        issues.push({
-          id: `relationship-type-${relationship.id}`,
-          severity: "warning",
-          title: "Mapped attributes use different logical types",
-          detail: `${sourceAttribute.name} is ${sourceAttribute.logicalType}; ${targetAttribute.name} is ${targetAttribute.logicalType}.`,
-          selection: { kind: "relationship", id: relationship.id },
-        });
-      }
+      rest.forEach((participant) => {
+        const other = project.model.entities[participant.entityId]?.attributes.find(
+          (attribute) => attribute.id === participant.attributeId,
+        );
+        if (
+          firstAttribute &&
+          other &&
+          normalized(firstAttribute.logicalType) !== normalized(other.logicalType)
+        ) {
+          issues.push({
+            id: `relationship-type-${relationship.id}-${participant.id}`,
+            severity: "warning",
+            title: "Mapped attributes use different logical types",
+            detail: `${firstAttribute.name} is ${firstAttribute.logicalType}; ${other.name} is ${other.logicalType}.`,
+            selection: { kind: "relationship", id: relationship.id },
+          });
+        }
+      });
     }
-    if (
-      !relationship.sourceAttributeId &&
-      !relationship.targetAttributeId &&
-      relationship.kind === "association"
-    ) {
+    if (mappedParticipants.length === 0 && relationship.kind === "association") {
       issues.push({
         id: `relationship-map-${relationship.id}`,
         severity: "info",

@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link2, Plus, X } from "lucide-react";
-import {
-  CARDINALITY_OPTIONS,
-  type Cardinality,
-  type RelationshipKind,
-} from "../domain/model";
+import type { Cardinality, RelationshipKind } from "../domain/model";
+import { CardinalitySelect } from "./CardinalitySelect";
 import { createId } from "../domain/project";
 import { useProjectStore } from "../state/projectStore";
 
@@ -59,6 +56,9 @@ function RelationshipDialogContent({
     useState<Cardinality>("zero-or-many");
   const [name, setName] = useState("");
   const [kind, setKind] = useState<RelationshipKind>("association");
+  const [extraParticipants, setExtraParticipants] = useState<
+    Array<{ entityId: string; attributeId: string; cardinality: Cardinality }>
+  >([]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -70,9 +70,11 @@ function RelationshipDialogContent({
 
   const source = project.model.entities[sourceEntityId];
   const target = project.model.entities[targetEntityId];
+  const isNary = kind === "association" && extraParticipants.length > 0;
   const canCreate = Boolean(
     sourceEntityId &&
     targetEntityId &&
+    extraParticipants.every((participant) => participant.entityId) &&
     (kind === "association" || sourceEntityId !== targetEntityId),
   );
 
@@ -85,12 +87,54 @@ function RelationshipDialogContent({
       requestedId,
       sourceAttributeId || null,
       targetAttributeId || null,
-      { name, kind, sourceCardinality, targetCardinality },
+      {
+        name,
+        kind,
+        sourceCardinality,
+        targetCardinality,
+        participants: isNary
+          ? [
+              {
+                entityId: sourceEntityId,
+                attributeId: sourceAttributeId || null,
+                cardinality: sourceCardinality,
+              },
+              {
+                entityId: targetEntityId,
+                attributeId: targetAttributeId || null,
+                cardinality: targetCardinality,
+              },
+              ...extraParticipants.map((participant) => ({
+                entityId: participant.entityId,
+                attributeId: participant.attributeId || null,
+                cardinality: participant.cardinality,
+              })),
+            ]
+          : undefined,
+      },
     );
     if (!relationshipId) return;
     ensureEntityVisible(sourceEntityId, activeDiagramId);
     ensureEntityVisible(targetEntityId, activeDiagramId);
+    extraParticipants.forEach((participant) =>
+      ensureEntityVisible(participant.entityId, activeDiagramId),
+    );
     onClose();
+  };
+
+  const updateParticipant = (
+    index: number,
+    changes: Partial<{
+      entityId: string;
+      attributeId: string;
+      cardinality: Cardinality;
+    }>,
+  ) => {
+    setExtraParticipants((current) =>
+      current.map((participant, position) =>
+        position === index ? { ...participant, ...changes } : participant,
+      ),
+    );
   };
 
   return (
@@ -201,10 +245,81 @@ function RelationshipDialogContent({
                   onCardinalityChange={setTargetCardinality}
                 />
               </div>
+              {kind === "association" && (
+                <div className="relationship-dialog-participants">
+                  {extraParticipants.map((participant, index) => (
+                    <div key={index} className="relationship-dialog-participant-row">
+                      <EndpointFields
+                        label={`Participant ${index + 3}`}
+                        entities={entities}
+                        entityId={participant.entityId}
+                        attributeId={participant.attributeId}
+                        cardinality={participant.cardinality}
+                        showMapping
+                        onEntityChange={(value) =>
+                          updateParticipant(index, {
+                            entityId: value,
+                            attributeId: "",
+                          })
+                        }
+                        onAttributeChange={(value) =>
+                          updateParticipant(index, { attributeId: value })
+                        }
+                        onCardinalityChange={(value) =>
+                          updateParticipant(index, { cardinality: value })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={`Remove participant ${index + 3}`}
+                        onClick={() =>
+                          setExtraParticipants((current) =>
+                            current.filter((_, position) => position !== index),
+                          )
+                        }
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() =>
+                      setExtraParticipants((current) => [
+                        ...current,
+                        {
+                          entityId: entities[0]?.id ?? "",
+                          attributeId: "",
+                          cardinality: "zero-or-many",
+                        },
+                      ])
+                    }
+                  >
+                    <Plus size={14} /> Add participant
+                  </button>
+                  {isNary && (
+                    <p className="dialog-inline-note">
+                      Three or more participants create an n-ary relationship, rendered
+                      as a hub with a leg to each entity.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="relationship-dialog-summary">
                 <strong>{source?.name || "Source"}</strong>
                 <span>will relate to</span>
                 <strong>{target?.name || "Target"}</strong>
+                {extraParticipants.map((participant, index) => (
+                  <span key={index}>
+                    {" "}
+                    +{" "}
+                    <strong>
+                      {project.model.entities[participant.entityId]?.name || "…"}
+                    </strong>
+                  </span>
+                ))}
               </div>
             </>
           )}
@@ -291,19 +406,7 @@ function EndpointFields({
           </label>
           <label>
             Cardinality
-            <select
-              className="select-field"
-              value={cardinality}
-              onChange={(event) =>
-                onCardinalityChange(event.target.value as Cardinality)
-              }
-            >
-              {CARDINALITY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label} ({option.shortLabel})
-                </option>
-              ))}
-            </select>
+            <CardinalitySelect value={cardinality} onChange={onCardinalityChange} />
           </label>
         </>
       )}

@@ -1,9 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
   Box,
+  ClipboardPaste,
   Copy,
+  GripVertical,
   KeyRound,
   Link2,
   LockKeyhole,
@@ -13,13 +15,20 @@ import {
   Trash2,
 } from "lucide-react";
 import {
-  CARDINALITY_OPTIONS,
+  ATTRIBUTE_SORT_OPTIONS,
+  sortAttributes,
+  type AttributeSortMode,
+} from "../domain/attributeOrder";
+import {
   COMMON_LOGICAL_TYPES,
+  isNaryRelationship,
   type Cardinality,
   type EntityIdentifier,
   type IdentifierKind,
+  type InversionEntry,
   type RelationshipKind,
 } from "../domain/model";
+import { CardinalitySelect } from "./CardinalitySelect";
 import { useProjectStore } from "../state/projectStore";
 import { useUiStore } from "../state/uiStore";
 
@@ -47,21 +56,37 @@ export function Inspector() {
   const addAttribute = useProjectStore((state) => state.addAttribute);
   const updateAttribute = useProjectStore((state) => state.updateAttribute);
   const moveAttribute = useProjectStore((state) => state.moveAttribute);
+  const reorderAttributes = useProjectStore((state) => state.reorderAttributes);
   const deleteAttribute = useProjectStore((state) => state.deleteAttribute);
   const addIdentifier = useProjectStore((state) => state.addIdentifier);
   const updateIdentifier = useProjectStore((state) => state.updateIdentifier);
   const deleteIdentifier = useProjectStore((state) => state.deleteIdentifier);
+  const addInversionEntry = useProjectStore((state) => state.addInversionEntry);
+  const updateInversionEntry = useProjectStore((state) => state.updateInversionEntry);
+  const deleteInversionEntry = useProjectStore((state) => state.deleteInversionEntry);
   const updateRelationship = useProjectStore((state) => state.updateRelationship);
   const updateRelationshipVertices = useProjectStore(
     (state) => state.updateRelationshipVertices,
   );
+  const setRelationshipParticipants = useProjectStore(
+    (state) => state.setRelationshipParticipants,
+  );
   const deleteRelationship = useProjectStore((state) => state.deleteRelationship);
   const toggleEntityCollapsed = useProjectStore((state) => state.toggleEntityCollapsed);
   const toggleEntityPinned = useProjectStore((state) => state.toggleEntityPinned);
+  const addDiagramNote = useProjectStore((state) => state.addDiagramNote);
   const updateDiagramNote = useProjectStore((state) => state.updateDiagramNote);
   const deleteDiagramNote = useProjectStore((state) => state.deleteDiagramNote);
+  const setSelection = useProjectStore((state) => state.setSelection);
   const updateSubjectArea = useProjectStore((state) => state.updateSubjectArea);
   const deleteSubjectArea = useProjectStore((state) => state.deleteSubjectArea);
+  const openBulkImport = useUiStore((state) => state.openBulkImport);
+
+  const [dragAttributeId, setDragAttributeId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    after: boolean;
+  } | null>(null);
 
   const focusAttribute = useCallback((attributeId: string) => {
     requestAnimationFrame(() => {
@@ -141,6 +166,9 @@ export function Inspector() {
   if (selection.kind === "entity") {
     const entity = project.model.entities[selection.id];
     const view = project.diagrams[activeDiagramId]?.entityViews[selection.id] ?? null;
+    const comments = Object.values(
+      project.diagrams[activeDiagramId]?.notes ?? {},
+    ).filter((note) => note.entityId === selection.id);
     if (!entity) return null;
 
     const addAndFocusAttribute = (afterAttributeId?: string) => {
@@ -274,13 +302,51 @@ export function Inspector() {
                 <span className="eyebrow">Structure</span>
                 <h3>Attributes</h3>
               </div>
-              <button
-                type="button"
-                className="small-button"
-                onClick={() => addAndFocusAttribute()}
-              >
-                <Plus size={13} /> Add
-              </button>
+              <div className="section-heading-actions">
+                <select
+                  className="compact-select arrange-select"
+                  value=""
+                  aria-label="Arrange attributes"
+                  title="Reorder all attributes at once"
+                  onChange={(event) => {
+                    const mode = event.target.value as AttributeSortMode;
+                    if (!mode) return;
+                    reorderAttributes(
+                      entity.id,
+                      sortAttributes(
+                        entity,
+                        mode,
+                        Object.values(project.model.relationships),
+                      ).map((attribute) => attribute.id),
+                    );
+                    event.target.value = "";
+                  }}
+                >
+                  <option value="" disabled>
+                    Arrange…
+                  </option>
+                  {ATTRIBUTE_SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="small-button"
+                  title="Paste attribute rows copied from a spreadsheet"
+                  onClick={() => openBulkImport(entity.id)}
+                >
+                  <ClipboardPaste size={13} /> Paste
+                </button>
+                <button
+                  type="button"
+                  className="small-button"
+                  onClick={() => addAndFocusAttribute()}
+                >
+                  <Plus size={13} /> Add
+                </button>
+              </div>
             </div>
 
             <datalist id="logical-types">
@@ -294,26 +360,96 @@ export function Inspector() {
               ))}
             </datalist>
 
-            <div className="attribute-editor-list">
+            <div
+              className="attribute-editor-list"
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                  setDropTarget(null);
+                }
+              }}
+            >
               {entity.attributes.map((attribute, index) => (
-                <div className="attribute-editor" key={attribute.id}>
+                <div
+                  className={`attribute-editor${
+                    dropTarget?.id === attribute.id
+                      ? dropTarget.after
+                        ? " drop-after"
+                        : " drop-before"
+                      : ""
+                  }${dragAttributeId === attribute.id ? " dragging" : ""}`}
+                  key={attribute.id}
+                  onDragOver={(event) => {
+                    if (!dragAttributeId || dragAttributeId === attribute.id) return;
+                    event.preventDefault();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setDropTarget({
+                      id: attribute.id,
+                      after: event.clientY > rect.top + rect.height / 2,
+                    });
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (!dragAttributeId) return;
+                    const sourceIndex = entity.attributes.findIndex(
+                      (candidate) => candidate.id === dragAttributeId,
+                    );
+                    if (sourceIndex < 0) return;
+                    const after = dropTarget?.id === attribute.id && dropTarget.after;
+                    let targetIndex = after ? index + 1 : index;
+                    if (sourceIndex < targetIndex) targetIndex -= 1;
+                    moveAttribute(entity.id, dragAttributeId, targetIndex);
+                    setDragAttributeId(null);
+                    setDropTarget(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragAttributeId(null);
+                    setDropTarget(null);
+                  }}
+                >
                   <div className="attribute-order-controls">
+                    <span
+                      className="attribute-drag-handle"
+                      title="Drag to reorder"
+                      draggable
+                      aria-label={`Drag ${attribute.name || "attribute"} to reorder`}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", attribute.id);
+                        setDragAttributeId(attribute.id);
+                      }}
+                    >
+                      <GripVertical size={11} />
+                    </span>
                     <span>{index + 1}</span>
                     <button
                       type="button"
-                      title="Move attribute up"
+                      title="Move attribute up — ⇧-click moves to top"
                       aria-label={`Move ${attribute.name || "attribute"} up`}
                       disabled={index === 0}
-                      onClick={() => moveAttribute(entity.id, attribute.id, index - 1)}
+                      onClick={(event) =>
+                        moveAttribute(
+                          entity.id,
+                          attribute.id,
+                          event.shiftKey || event.metaKey ? 0 : index - 1,
+                        )
+                      }
                     >
                       <ArrowUp size={10} />
                     </button>
                     <button
                       type="button"
-                      title="Move attribute down"
+                      title="Move attribute down — ⇧-click moves to bottom"
                       aria-label={`Move ${attribute.name || "attribute"} down`}
                       disabled={index === entity.attributes.length - 1}
-                      onClick={() => moveAttribute(entity.id, attribute.id, index + 1)}
+                      onClick={(event) =>
+                        moveAttribute(
+                          entity.id,
+                          attribute.id,
+                          event.shiftKey || event.metaKey
+                            ? entity.attributes.length - 1
+                            : index + 1,
+                        )
+                      }
                     >
                       <ArrowDown size={10} />
                     </button>
@@ -458,6 +594,82 @@ export function Inspector() {
               )}
             </div>
           </section>
+
+          <section className="property-section inversion-section">
+            <div className="property-section-heading">
+              <div>
+                <span className="eyebrow">Access paths</span>
+                <h3>Inversion entries</h3>
+              </div>
+              <button
+                type="button"
+                className="small-button"
+                disabled={entity.attributes.length === 0}
+                onClick={() => addInversionEntry(entity.id)}
+              >
+                <Plus size={13} /> Add
+              </button>
+            </div>
+            <div className="identifier-list">
+              {entity.inversionEntries.map((entry) => (
+                <InversionEntryEditor
+                  key={entry.id}
+                  entry={entry}
+                  attributes={entity.attributes}
+                  onChange={(changes) =>
+                    updateInversionEntry(entity.id, entry.id, changes)
+                  }
+                  onDelete={() => deleteInversionEntry(entity.id, entry.id)}
+                />
+              ))}
+              {entity.inversionEntries.length === 0 && (
+                <p className="empty-copy">
+                  Inversion entries record non-identifying access paths — attribute sets
+                  that are meaningful ways to reach occurrences without asserting
+                  uniqueness.
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="property-section comments-section">
+            <div className="property-section-heading">
+              <div>
+                <span className="eyebrow">Review</span>
+                <h3>Comments</h3>
+              </div>
+              {view && (
+                <button
+                  type="button"
+                  className="small-button"
+                  title="Attach a comment note next to this entity on the diagram"
+                  onClick={() => addDiagramNote(activeDiagramId, undefined, entity.id)}
+                >
+                  <Plus size={13} /> Add comment
+                </button>
+              )}
+            </div>
+            <div className="identifier-list">
+              {comments.map((note) => (
+                <button
+                  type="button"
+                  key={note.id}
+                  className="comment-item"
+                  title="Select comment on the diagram"
+                  onClick={() => setSelection({ kind: "note", id: note.id })}
+                >
+                  {note.text.trim() || "Empty comment"}
+                </button>
+              ))}
+              {comments.length === 0 && (
+                <p className="empty-copy">
+                  {view
+                    ? "Comments are sticky notes anchored to this entity — handy for review-meeting feedback. They move with the entity and live on this diagram."
+                    : "Show this entity on the diagram to attach comments."}
+                </p>
+              )}
+            </div>
+          </section>
         </div>
       </aside>
     );
@@ -467,6 +679,10 @@ export function Inspector() {
   if (selection.kind === "note") {
     const note = activeDiagram?.notes[selection.id];
     if (!note) return null;
+    const attachedEntity = note.entityId
+      ? project.model.entities[note.entityId]
+      : undefined;
+    const attachCandidates = Object.keys(activeDiagram?.entityViews ?? {});
     return (
       <aside className="inspector">
         <div className="inspector-header">
@@ -474,8 +690,10 @@ export function Inspector() {
             <span>✎</span>
           </div>
           <div>
-            <span className="eyebrow">Diagram note</span>
-            <h2>Note</h2>
+            <span className="eyebrow">
+              {attachedEntity ? "Comment" : "Diagram note"}
+            </span>
+            <h2>{attachedEntity ? `On ${attachedEntity.name}` : "Note"}</h2>
           </div>
           <button
             type="button"
@@ -523,6 +741,30 @@ export function Inspector() {
                 updateDiagramNote(activeDiagramId, note.id, changes)
               }
             />
+            <label className="field-label" htmlFor="note-attach">
+              Attached to
+            </label>
+            <select
+              id="note-attach"
+              className="select-field"
+              value={note.entityId ?? ""}
+              onChange={(event) =>
+                updateDiagramNote(activeDiagramId, note.id, {
+                  entityId: event.target.value || undefined,
+                })
+              }
+            >
+              <option value="">Free-floating note</option>
+              {attachCandidates.map((entityId) => (
+                <option key={entityId} value={entityId}>
+                  {project.model.entities[entityId]?.name || "Untitled entity"}
+                </option>
+              ))}
+            </select>
+            <p className="empty-copy">
+              An attached note is a comment — it follows its entity, hides when the
+              entity is hidden, and is removed if the entity is deleted.
+            </p>
           </section>
         </div>
       </aside>
@@ -632,7 +874,11 @@ export function Inspector() {
               title: "Delete relationship?",
               message: `Delete the relationship between “${
                 source?.name ?? "Entity"
-              }” and “${target?.name ?? "Entity"}”?`,
+              }” and “${target?.name ?? "Entity"}”${
+                relationship.participants?.length
+                  ? ` (+${relationship.participants.length - 2} more participants)`
+                  : ""
+              }?`,
               confirmLabel: "Delete relationship",
               destructive: true,
             });
@@ -718,58 +964,161 @@ export function Inspector() {
           </div>
         </section>
 
-        <section className="property-section relationship-ends">
-          <span className="eyebrow">Endpoints & cardinality</span>
-          <RelationshipEndEditor
-            role="Source"
-            accent="source"
-            entities={Object.values(project.model.entities)}
-            entity={source}
-            entityId={relationship.sourceEntityId}
-            attributeId={relationship.sourceAttributeId}
-            cardinality={relationship.sourceCardinality}
-            showCardinality={relationship.kind === "association"}
-            onEntityChange={(entityId) =>
-              updateRelationship(relationship.id, {
-                sourceEntityId: entityId,
-                sourceAttributeId: null,
-              })
-            }
-            onAttributeChange={(sourceAttributeId) =>
-              updateRelationship(relationship.id, { sourceAttributeId })
-            }
-            onCardinalityChange={(sourceCardinality) =>
-              updateRelationship(relationship.id, { sourceCardinality })
-            }
-          />
-          <div className="relationship-line-preview">
-            <span />
-            <Link2 size={13} />
-            <span />
-          </div>
-          <RelationshipEndEditor
-            role="Target"
-            accent="target"
-            entities={Object.values(project.model.entities)}
-            entity={target}
-            entityId={relationship.targetEntityId}
-            attributeId={relationship.targetAttributeId}
-            cardinality={relationship.targetCardinality}
-            showCardinality={relationship.kind === "association"}
-            onEntityChange={(entityId) =>
-              updateRelationship(relationship.id, {
-                targetEntityId: entityId,
-                targetAttributeId: null,
-              })
-            }
-            onAttributeChange={(targetAttributeId) =>
-              updateRelationship(relationship.id, { targetAttributeId })
-            }
-            onCardinalityChange={(targetCardinality) =>
-              updateRelationship(relationship.id, { targetCardinality })
-            }
-          />
-        </section>
+        {isNaryRelationship(relationship) ? (
+          <section className="property-section relationship-ends">
+            <span className="eyebrow">Participants & cardinality</span>
+            <p className="dialog-inline-note">
+              N-ary relationship — rendered as a hub with one leg per participant.
+            </p>
+            {(relationship.participants ?? []).map((participant, index) => (
+              <div key={participant.id} className="participant-editor">
+                <RelationshipEndEditor
+                  role={`Participant ${index + 1}`}
+                  accent={index % 2 === 0 ? "source" : "target"}
+                  entities={Object.values(project.model.entities)}
+                  entity={project.model.entities[participant.entityId]}
+                  entityId={participant.entityId}
+                  attributeId={participant.attributeId}
+                  cardinality={participant.cardinality}
+                  showCardinality={relationship.kind === "association"}
+                  onEntityChange={(entityId) =>
+                    setRelationshipParticipants(
+                      relationship.id,
+                      (relationship.participants ?? []).map((item) =>
+                        item.id === participant.id
+                          ? { ...item, entityId, attributeId: null }
+                          : item,
+                      ),
+                    )
+                  }
+                  onAttributeChange={(attributeId) =>
+                    setRelationshipParticipants(
+                      relationship.id,
+                      (relationship.participants ?? []).map((item) =>
+                        item.id === participant.id ? { ...item, attributeId } : item,
+                      ),
+                    )
+                  }
+                  onCardinalityChange={(cardinality) =>
+                    setRelationshipParticipants(
+                      relationship.id,
+                      (relationship.participants ?? []).map((item) =>
+                        item.id === participant.id ? { ...item, cardinality } : item,
+                      ),
+                    )
+                  }
+                />
+                <label>
+                  Role
+                  <input
+                    className="text-field"
+                    value={participant.role}
+                    onChange={(event) =>
+                      setRelationshipParticipants(
+                        relationship.id,
+                        (relationship.participants ?? []).map((item) =>
+                          item.id === participant.id
+                            ? { ...item, role: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                    placeholder="Role name"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="icon-button danger"
+                  aria-label={`Remove participant ${index + 1}`}
+                  title="Remove participant"
+                  onClick={() =>
+                    setRelationshipParticipants(
+                      relationship.id,
+                      (relationship.participants ?? []).filter(
+                        (item) => item.id !== participant.id,
+                      ),
+                    )
+                  }
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="small-button"
+              onClick={() => {
+                const unused =
+                  Object.values(project.model.entities).find(
+                    (entity) =>
+                      !(relationship.participants ?? []).some(
+                        (participant) => participant.entityId === entity.id,
+                      ),
+                  ) ?? Object.values(project.model.entities)[0];
+                if (!unused) return;
+                setRelationshipParticipants(relationship.id, [
+                  ...(relationship.participants ?? []),
+                  { entityId: unused.id },
+                ]);
+              }}
+            >
+              <Plus size={13} /> Add participant
+            </button>
+          </section>
+        ) : (
+          <section className="property-section relationship-ends">
+            <span className="eyebrow">Endpoints & cardinality</span>
+            <RelationshipEndEditor
+              role="Source"
+              accent="source"
+              entities={Object.values(project.model.entities)}
+              entity={source}
+              entityId={relationship.sourceEntityId}
+              attributeId={relationship.sourceAttributeId}
+              cardinality={relationship.sourceCardinality}
+              showCardinality={relationship.kind === "association"}
+              onEntityChange={(entityId) =>
+                updateRelationship(relationship.id, {
+                  sourceEntityId: entityId,
+                  sourceAttributeId: null,
+                })
+              }
+              onAttributeChange={(sourceAttributeId) =>
+                updateRelationship(relationship.id, { sourceAttributeId })
+              }
+              onCardinalityChange={(sourceCardinality) =>
+                updateRelationship(relationship.id, { sourceCardinality })
+              }
+            />
+            <div className="relationship-line-preview">
+              <span />
+              <Link2 size={13} />
+              <span />
+            </div>
+            <RelationshipEndEditor
+              role="Target"
+              accent="target"
+              entities={Object.values(project.model.entities)}
+              entity={target}
+              entityId={relationship.targetEntityId}
+              attributeId={relationship.targetAttributeId}
+              cardinality={relationship.targetCardinality}
+              showCardinality={relationship.kind === "association"}
+              onEntityChange={(entityId) =>
+                updateRelationship(relationship.id, {
+                  targetEntityId: entityId,
+                  targetAttributeId: null,
+                })
+              }
+              onAttributeChange={(targetAttributeId) =>
+                updateRelationship(relationship.id, { targetAttributeId })
+              }
+              onCardinalityChange={(targetCardinality) =>
+                updateRelationship(relationship.id, { targetCardinality })
+              }
+            />
+          </section>
+        )}
 
         <section className="property-section">
           <div className="relationship-route-control">
@@ -921,6 +1270,69 @@ function IdentifierEditor({
   );
 }
 
+interface InversionEntryEditorProps {
+  entry: InversionEntry;
+  attributes: Array<{ id: string; name: string }>;
+  onChange: (changes: Partial<InversionEntry>) => void;
+  onDelete: () => void;
+}
+
+function InversionEntryEditor({
+  entry,
+  attributes,
+  onChange,
+  onDelete,
+}: InversionEntryEditorProps) {
+  return (
+    <div className="identifier-editor">
+      <div className="identifier-editor-heading">
+        <input
+          className="inline-field"
+          value={entry.name}
+          aria-label="Inversion entry name"
+          onChange={(event) => onChange({ name: event.target.value })}
+        />
+        <button
+          type="button"
+          className="attribute-delete"
+          title="Delete inversion entry"
+          aria-label="Delete inversion entry"
+          onClick={onDelete}
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+      <input
+        className="inline-field inversion-entry-description"
+        value={entry.description}
+        aria-label="Inversion entry description"
+        placeholder="Access path description"
+        onChange={(event) => onChange({ description: event.target.value })}
+      />
+      <div className="identifier-attributes">
+        {attributes.map((attribute) => {
+          const checked = entry.attributeIds.includes(attribute.id);
+          return (
+            <label key={attribute.id}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => {
+                  const next = checked
+                    ? entry.attributeIds.filter((id) => id !== attribute.id)
+                    : [...entry.attributeIds, attribute.id];
+                  if (next.length > 0) onChange({ attributeIds: next });
+                }}
+              />
+              <span>{attribute.name || "Untitled attribute"}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 interface RelationshipEndEditorProps {
   role: string;
   accent: "source" | "target";
@@ -986,18 +1398,11 @@ function RelationshipEndEditor({
       {showCardinality && (
         <>
           <label className="relationship-control-label">Cardinality</label>
-          <select
-            className="select-field"
-            aria-label={`${role} cardinality`}
+          <CardinalitySelect
+            ariaLabel={`${role} cardinality`}
             value={cardinality}
-            onChange={(event) => onCardinalityChange(event.target.value as Cardinality)}
-          >
-            {CARDINALITY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label} ({option.shortLabel})
-              </option>
-            ))}
-          </select>
+            onChange={onCardinalityChange}
+          />
         </>
       )}
     </div>

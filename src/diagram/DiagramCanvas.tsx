@@ -16,11 +16,18 @@ import {
 import {
   attributeIdFromPort,
   createEntityNodeMetadata,
+  createNaryLegMetadata,
+  createNoteLinkEdgeMetadata,
   createNoteNodeMetadata,
   createRelationshipEdgeMetadata,
+  createRelationshipHubMetadata,
   createSubjectAreaNodeMetadata,
   registerJoineryMarkers,
+  relationshipHubId,
+  relationshipIdFromCellId,
+  relationshipLegId,
 } from "./shapes";
+import { isNaryRelationship } from "../domain/model";
 
 export interface DiagramCanvasHandle {
   fit: () => void;
@@ -42,8 +49,11 @@ function selectionForCell(cell: Node | Edge): ProjectSelection {
   if (cell.isNode() && data?.kind === "subject-area") {
     return { kind: "subject-area", id: cell.id };
   }
+  if (cell.isNode() && data?.kind === "relationship-hub") {
+    return { kind: "relationship", id: relationshipIdFromCellId(cell.id) };
+  }
   if (cell.isEdge() && data?.kind === "relationship") {
-    return { kind: "relationship", id: cell.id };
+    return { kind: "relationship", id: relationshipIdFromCellId(cell.id) };
   }
   return null;
 }
@@ -61,7 +71,8 @@ function updateCanvasAccessibility(
       const cellId = element.dataset.cellId;
       if (!cellId) return;
       const entity = project.model.entities[cellId];
-      const relationship = project.model.relationships[cellId];
+      const relationship =
+        project.model.relationships[relationshipIdFromCellId(cellId)];
       const note = diagram.notes[cellId];
       const subjectArea = diagram.subjectAreas[cellId];
       element.setAttribute("tabindex", "0");
@@ -71,12 +82,23 @@ function updateCanvasAccessibility(
       } else if (relationship) {
         const source = project.model.entities[relationship.sourceEntityId]?.name;
         const target = project.model.entities[relationship.targetEntityId]?.name;
+        const arity = relationship.participants?.length
+          ? `, ${relationship.participants.length} participants`
+          : "";
         element.setAttribute(
           "aria-label",
-          `Relationship ${relationship.name || `${source} to ${target}`}`,
+          `Relationship ${relationship.name || `${source} to ${target}`}${arity}`,
         );
       } else if (note) {
-        element.setAttribute("aria-label", `Diagram note ${note.text.slice(0, 60)}`);
+        const attached = note.entityId
+          ? project.model.entities[note.entityId]?.name
+          : undefined;
+        element.setAttribute(
+          "aria-label",
+          attached
+            ? `Comment on ${attached}: ${note.text.slice(0, 60)}`
+            : `Diagram note ${note.text.slice(0, 60)}`,
+        );
       } else if (subjectArea) {
         element.setAttribute("aria-label", `Subject area ${subjectArea.name}`);
       }
@@ -89,23 +111,39 @@ function syncGraph(graph: Graph, theme: Theme): void {
   if (!diagram) return;
 
   const visibleEntityIds = new Set(Object.keys(diagram.entityViews));
-  const desiredNodeIds = new Set([
-    ...visibleEntityIds,
-    ...Object.keys(diagram.notes),
-    ...Object.keys(diagram.subjectAreas),
-  ]);
   const visibleRelationships = Object.values(project.model.relationships).filter(
     (relationship) =>
-      visibleEntityIds.has(relationship.sourceEntityId) &&
-      visibleEntityIds.has(relationship.targetEntityId),
+      isNaryRelationship(relationship)
+        ? relationship.participants!.every((participant) =>
+            visibleEntityIds.has(participant.entityId),
+          )
+        : visibleEntityIds.has(relationship.sourceEntityId) &&
+          visibleEntityIds.has(relationship.targetEntityId),
   );
-  const visibleRelationshipIds = new Set(
-    visibleRelationships.map((relationship) => relationship.id),
+  const naryRelationships = visibleRelationships.filter(isNaryRelationship);
+  const visibleNotes = Object.values(diagram.notes).filter(
+    (note) => !note.entityId || visibleEntityIds.has(note.entityId),
   );
+  const desiredNodeIds = new Set([
+    ...visibleEntityIds,
+    ...visibleNotes.map((note) => note.id),
+    ...Object.keys(diagram.subjectAreas),
+    ...naryRelationships.map((relationship) => relationshipHubId(relationship.id)),
+  ]);
+  const desiredEdgeIds = new Set([
+    ...visibleRelationships.flatMap((relationship) =>
+      isNaryRelationship(relationship)
+        ? (relationship.participants ?? []).map((participant) =>
+            relationshipLegId(relationship.id, participant.id),
+          )
+        : [relationship.id],
+    ),
+    ...visibleNotes.filter((note) => note.entityId).map((note) => `${note.id}__link`),
+  ]);
 
   graph.batchUpdate("joinery-sync", () => {
     graph.getEdges().forEach((edge) => {
-      if (!visibleRelationshipIds.has(edge.id)) graph.removeCell(edge);
+      if (!desiredEdgeIds.has(edge.id)) graph.removeCell(edge);
     });
     graph.getNodes().forEach((node) => {
       if (!desiredNodeIds.has(node.id)) graph.removeCell(node);
@@ -162,7 +200,7 @@ function syncGraph(graph: Graph, theme: Theme): void {
       }
     });
 
-    Object.values(diagram.notes).forEach((note) => {
+    visibleNotes.forEach((note) => {
       const metadata = createNoteNodeMetadata(note, theme);
       const existing = graph.getCellById(note.id);
       if (!existing || !existing.isNode()) {
@@ -184,7 +222,77 @@ function syncGraph(graph: Graph, theme: Theme): void {
       }
     });
 
+    visibleNotes.forEach((note) => {
+      if (!note.entityId) return;
+      const linkId = `${note.id}__link`;
+      if (!graph.getCellById(linkId)) {
+        graph.addEdge(
+          createNoteLinkEdgeMetadata(note as typeof note & { entityId: string }),
+        );
+      }
+    });
+
     visibleRelationships.forEach((relationship) => {
+      if (isNaryRelationship(relationship)) {
+        const hubMetadata = createRelationshipHubMetadata(
+          relationship,
+          diagram,
+          project.model.entities,
+          theme,
+        );
+        const hubId = hubMetadata.id as string;
+        const existingHub = graph.getCellById(hubId);
+        if (!existingHub || !existingHub.isNode()) {
+          graph.addNode(hubMetadata);
+        } else {
+          const hub = existingHub as Node;
+          const previousData = hub.getData<{ renderKey?: string }>();
+          const nextData = hubMetadata.data as { renderKey?: string };
+          if (previousData?.renderKey !== nextData.renderKey) {
+            hub.replaceAttrs(hubMetadata.attrs!);
+            hub.setData(hubMetadata.data);
+          }
+          const storedHub = diagram.relationshipViews[relationship.id]?.hub;
+          if (
+            storedHub &&
+            (hub.position().x !== storedHub.x - (hubMetadata.width as number) / 2 ||
+              hub.position().y !== storedHub.y - (hubMetadata.height as number) / 2)
+          ) {
+            hub.position(
+              storedHub.x - (hubMetadata.width as number) / 2,
+              storedHub.y - (hubMetadata.height as number) / 2,
+            );
+          }
+        }
+        (relationship.participants ?? []).forEach((participant) => {
+          const legMetadata = createNaryLegMetadata(
+            relationship,
+            participant,
+            project,
+            diagram,
+            theme,
+          );
+          const existingLeg = graph.getCellById(legMetadata.id as string);
+          if (!existingLeg || !existingLeg.isEdge()) {
+            graph.addEdge(legMetadata);
+            return;
+          }
+          const leg = existingLeg as Edge;
+          leg.setSource(legMetadata.source as Edge.TerminalData);
+          leg.setTarget(legMetadata.target as Edge.TerminalData);
+          leg.setRouter(legMetadata.router!);
+          leg.setConnector(legMetadata.connector!);
+          const previousData = leg.getData<{ renderKey?: string }>();
+          const nextData = legMetadata.data as { renderKey?: string };
+          if (previousData?.renderKey !== nextData.renderKey) {
+            leg.replaceAttrs(legMetadata.attrs!);
+            leg.setLabels(legMetadata.labels ?? []);
+            leg.setData(legMetadata.data);
+          }
+        });
+        return;
+      }
+
       const metadata = createRelationshipEdgeMetadata(
         relationship,
         project,
@@ -347,16 +455,17 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
       });
 
       graph.on("edge:click", ({ edge }) => {
-        if (useProjectStore.getState().project.model.relationships[edge.id]) {
+        const relationshipId = relationshipIdFromCellId(edge.id);
+        if (useProjectStore.getState().project.model.relationships[relationshipId]) {
           useProjectStore
             .getState()
-            .setSelection({ kind: "relationship", id: edge.id });
+            .setSelection({ kind: "relationship", id: relationshipId });
         }
       });
 
       graph.on("node:moved", ({ node }) => {
         const position = node.position();
-        const data = node.getData<{ kind?: string }>();
+        const data = node.getData<{ kind?: string; relationshipId?: string }>();
         const state = useProjectStore.getState();
         if (data?.kind === "entity") {
           state.updateEntityPosition(state.activeDiagramId, node.id, position);
@@ -364,10 +473,22 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
           state.updateDiagramNote(state.activeDiagramId, node.id, position);
         } else if (data?.kind === "subject-area") {
           state.updateSubjectArea(state.activeDiagramId, node.id, position);
+        } else if (data?.kind === "relationship-hub" && data.relationshipId) {
+          // Hub positions are stored as the node center, not the top-left.
+          state.updateRelationshipHub(state.activeDiagramId, data.relationshipId, {
+            x: position.x + node.size().width / 2,
+            y: position.y + node.size().height / 2,
+          });
         }
       });
 
       graph.on("edge:connected", ({ edge, isNew }) => {
+        const edgeData = edge.getData<{ participantId?: string }>();
+        if (edgeData?.participantId) {
+          // N-ary legs are derived from participants — never reconnectable.
+          syncGraph(graph, useUiStore.getState().theme);
+          return;
+        }
         const sourceId = edge.getSourceCellId();
         const targetId = edge.getTargetCellId();
         if (!sourceId || !targetId) return;
@@ -517,7 +638,9 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
       suppressSelectionEvent.current = true;
       graph.cleanSelection();
       if (selection) {
-        const cell = graph.getCellById(selection.id);
+        const cell =
+          graph.getCellById(selection.id) ??
+          graph.getCellById(relationshipHubId(selection.id));
         if (cell) graph.select(cell);
       }
       suppressSelectionEvent.current = false;

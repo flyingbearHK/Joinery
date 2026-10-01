@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Info, X, XCircle } from "lucide-react";
 import "./App.css";
+import { BulkAttributesDialog } from "./components/BulkAttributesDialog";
 import { CompareDialog } from "./components/CompareDialog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { DiagramDialog } from "./components/DiagramDialog";
@@ -19,7 +20,15 @@ import {
   useDocumentController,
 } from "./hooks/useDocumentController";
 import { chooseExportPath, exportDiagramFile } from "./native/exportIO";
-import { showDocumentError } from "./native/documentIO";
+import { confirmDiscardChanges, showDocumentError } from "./native/documentIO";
+import {
+  chooseAndReadModelFile,
+  chooseModelExportPath,
+  fileNameStem,
+  importModelFile,
+  renderModelExport,
+  writeModelFile,
+} from "./native/modelIO";
 import { useDocumentStore } from "./state/documentStore";
 import { useProjectStore } from "./state/projectStore";
 import { useUiStore } from "./state/uiStore";
@@ -34,9 +43,19 @@ function isEditingText(): boolean {
   );
 }
 
+const ENTITY_CLIPBOARD_MARKER = "joinery:entity:";
+
+function isImportableText(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (text.includes("\t")) return true;
+  return trimmed.split(/\r\n|\r|\n/).filter((line) => line.trim()).length >= 2;
+}
+
 function App() {
   const canvasRef = useRef<DiagramCanvasHandle>(null);
   const noticeTimer = useRef<number | null>(null);
+  const entityClipboardMarker = useRef<string | null>(null);
   const projectName = useProjectStore((state) => state.project.name);
   const activeDiagramName = useProjectStore(
     (state) => state.project.diagrams[state.activeDiagramId]?.name ?? "Diagram",
@@ -48,7 +67,6 @@ function App() {
   const undo = useProjectStore((state) => state.undo);
   const redo = useProjectStore((state) => state.redo);
   const copySelection = useProjectStore((state) => state.copySelection);
-  const pasteEntity = useProjectStore((state) => state.pasteEntity);
   const duplicateEntity = useProjectStore((state) => state.duplicateEntity);
   const addDiagramNote = useProjectStore((state) => state.addDiagramNote);
   const addSubjectArea = useProjectStore((state) => state.addSubjectArea);
@@ -77,6 +95,10 @@ function App() {
   const [exportPreviews, setExportPreviews] = useState<{
     white: string;
     transparent: string;
+  } | null>(null);
+  const [modelPreviews, setModelPreviews] = useState<{
+    mmd: string;
+    drawio: string;
   } | null>(null);
   const [notice, setNotice] = useState<DocumentNotice | null>(null);
 
@@ -111,23 +133,60 @@ function App() {
       background: "transparent",
       title,
     });
-    if (!exported || !transparent) {
-      showNotice({
-        kind: "error",
-        message: "The diagram is not ready to export yet.",
-      });
-      return;
-    }
-    setExportDimensions({ width: exported.width, height: exported.height });
-    setExportPreviews({
-      white: exported.svg,
-      transparent: transparent.svg,
+    const project = useProjectStore.getState().project;
+    setModelPreviews({
+      mmd: renderModelExport(project, activeDiagramId, "mmd"),
+      drawio: renderModelExport(project, activeDiagramId, "drawio"),
     });
+    if (!exported || !transparent) {
+      setExportDimensions(null);
+      setExportPreviews(null);
+    } else {
+      setExportDimensions({ width: exported.width, height: exported.height });
+      setExportPreviews({
+        white: exported.svg,
+        transparent: transparent.svg,
+      });
+    }
     setExportOpen(true);
   }
 
   async function handleExport(options: ExportOptions) {
     if (exportBusy) return;
+
+    if (options.format === "mmd" || options.format === "drawio") {
+      setExportBusy(true);
+      try {
+        const project = useProjectStore.getState().project;
+        const contents = renderModelExport(project, activeDiagramId, options.format);
+        const destination = await chooseModelExportPath(
+          projectName,
+          activeDiagramName,
+          options.format,
+        );
+        if (!destination) return;
+        await writeModelFile(destination, contents);
+        setExportOpen(false);
+        showNotice({
+          kind: "success",
+          message:
+            options.format === "mmd"
+              ? "Mermaid diagram exported successfully."
+              : "drawio file exported successfully.",
+        });
+      } catch (error) {
+        const detail =
+          error instanceof Error && error.message
+            ? error.message
+            : "Joinery could not export this model.";
+        showNotice({ kind: "error", message: detail });
+        await showDocumentError(detail);
+      } finally {
+        setExportBusy(false);
+      }
+      return;
+    }
+
     const exported = canvasRef.current?.createSvg({
       background: options.background,
       title: `${projectName} — ${activeDiagramName}`,
@@ -163,6 +222,42 @@ function App() {
       await showDocumentError(detail);
     } finally {
       setExportBusy(false);
+    }
+  }
+
+  async function handleImportModel() {
+    try {
+      const state = useProjectStore.getState();
+      if (state.isDirty && !(await confirmDiscardChanges("import a model file"))) {
+        return;
+      }
+      const file = await chooseAndReadModelFile();
+      if (!file) return;
+
+      useDocumentStore.getState().setActivity("opening");
+      const { project, warnings } = await importModelFile(file.path, file.contents);
+      useProjectStore.getState().loadProject(project, true);
+      useDocumentStore.getState().resetDocumentState();
+      const entityCount = Object.keys(project.model.entities).length;
+      const relationshipCount = Object.keys(project.model.relationships).length;
+      showNotice({
+        kind: warnings.length ? "info" : "success",
+        message:
+          `Imported ${entityCount} entit${entityCount === 1 ? "y" : "ies"} ` +
+          `and ${relationshipCount} relationship${relationshipCount === 1 ? "" : "s"} ` +
+          `from ${fileNameStem(file.path)}.` +
+          (warnings.length
+            ? ` ${warnings.length} note${warnings.length === 1 ? "" : "s"}: ${warnings[0]}`
+            : ""),
+      });
+    } catch (error) {
+      useDocumentStore.getState().setActivity("idle");
+      const detail =
+        error instanceof Error && error.message
+          ? error.message
+          : "Joinery could not import this file.";
+      showNotice({ kind: "error", message: detail });
+      await showDocumentError(detail);
     }
   }
 
@@ -225,14 +320,24 @@ function App() {
       if (isEditingText()) return;
 
       if (modifier && key === "c") {
-        if (copySelection()) event.preventDefault();
-        return;
-      }
-      if (modifier && key === "v") {
-        const entityId = pasteEntity();
-        if (entityId) {
+        if (copySelection()) {
           event.preventDefault();
-          requestAnimationFrame(() => canvasRef.current?.focusEntity(entityId));
+          const entity = useProjectStore.getState().clipboard?.entity;
+          const marker = entity ? `${ENTITY_CLIPBOARD_MARKER}${entity.id}` : null;
+          if (marker && navigator.clipboard?.writeText) {
+            entityClipboardMarker.current = marker;
+            try {
+              navigator.clipboard.writeText(marker).catch(() => {
+                if (entityClipboardMarker.current === marker) {
+                  entityClipboardMarker.current = null;
+                }
+              });
+            } catch {
+              entityClipboardMarker.current = null;
+            }
+          } else {
+            entityClipboardMarker.current = null;
+          }
         }
         return;
       }
@@ -246,7 +351,11 @@ function App() {
       }
 
       if (event.key === "Escape") {
-        setSelection(null);
+        if (useUiStore.getState().bulkImport) {
+          useUiStore.getState().closeBulkImport();
+        } else {
+          setSelection(null);
+        }
       }
       if (event.key === "Backspace" || event.key === "Delete") {
         event.preventDefault();
@@ -262,8 +371,36 @@ function App() {
       }
     }
 
+    function handlePaste(event: ClipboardEvent) {
+      if (isEditingText()) return;
+      const state = useProjectStore.getState();
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      const marker = entityClipboardMarker.current;
+      const hasEntityClipboard = Boolean(state.clipboard);
+      const markerMatches = hasEntityClipboard && marker !== null && text === marker;
+      const fallbackEntityPaste =
+        hasEntityClipboard && marker === null && !isImportableText(text);
+
+      if (markerMatches || fallbackEntityPaste) {
+        event.preventDefault();
+        const entityId = state.pasteEntity();
+        if (entityId) {
+          requestAnimationFrame(() => canvasRef.current?.focusEntity(entityId));
+        }
+        return;
+      }
+      if (!text.trim()) return;
+      event.preventDefault();
+      const entityId = state.selection?.kind === "entity" ? state.selection.id : null;
+      useUiStore.getState().openBulkImport(entityId, text);
+    }
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("paste", handlePaste);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("paste", handlePaste);
+    };
   });
 
   useEffect(
@@ -303,6 +440,7 @@ function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onNewProject={() => void documentController.newProject()}
         onOpenProject={() => void documentController.openProject()}
+        onImportModel={() => void handleImportModel()}
         onSaveProject={() => void documentController.saveProject()}
         onSaveProjectAs={() => void documentController.saveProject(true)}
         onQuit={() => void documentController.quitApplication()}
@@ -355,12 +493,14 @@ function App() {
         open={relationshipDialogOpen}
         onClose={() => setRelationshipDialogOpen(false)}
       />
+      <BulkAttributesDialog />
       <ExportDialog
         open={exportOpen}
         busy={exportBusy}
         diagramName={activeDiagramName}
         dimensions={exportDimensions}
         previews={exportPreviews}
+        modelPreviews={modelPreviews}
         onClose={() => {
           if (!exportBusy) setExportOpen(false);
         }}

@@ -32,11 +32,18 @@ Build **Joinery — BY FLYINGBEAR**, a standalone macOS-first data-modeling appl
 - Required/optional attributes.
 - Primary, alternate, and composite identifiers.
 - Association, recursive, identifying, and subtype/supertype relationships.
-- Crow's Foot cardinality, role names, descriptions, and attribute endpoint mappings.
-- Direct relationship drawing and explicit relationship dialog.
+- N-ary relationships (3+ participants) via `relationship.participants[]`; rendered as a labelled hub node + one leg edge per participant; binary source/target fields remain a projection of participants[0]/[1].
+- Crow's Foot cardinality incl. exact-N (`exactly-N` serializes as a string), role names, descriptions, and attribute endpoint mappings.
+- Inversion entries per entity (`entity.inversionEntries`) — named non-identifying access paths over attribute sets.
+- Selective compare-merge: CompareDialog checkboxes drive `mergeDifferences` (`src/domain/merge.ts`) through one history command.
+- Direct relationship drawing and explicit relationship dialog (with "Add participant" for n-ary).
 - Multiple diagrams, visibility management, independent positions, notes, subject-area frames, colors, pinning, and saved waypoints.
+- Entity-attached comments: `DiagramNote.entityId` anchors a note to an entity — follows moves (delta-shift in `updateEntityPosition(s)`), hides when the entity has no view, deletes on entity delete, and draws a dashed `<noteId>__link` edge (`createNoteLinkEdgeMetadata`).
+- Bulk import staging grid (`BulkAttributesDialog`): preview rows are editable (name/type/description/PK/Required/`referencesEntityId`), plus bulk type apply, add/remove rows, and name warnings. `referencesEntityId` creates an identifying relationship to that entity's first identifier attribute inside the same history entry (`applyRelationshipDrafts`).
 - Search, minimap, notation legend, pan/zoom/fit, ELK auto-layout, dense-diagram routing fallback.
 - Canonical undo/redo, copy/paste, duplicate, keyboard attribute insertion/reorder.
+- Attribute ordering: drag-to-reorder grip, Shift-click ↑/↓ jumps to top/bottom, and an "Arrange" select (`sortAttributes` in `src/domain/attributeOrder.ts`) applies one undoable `reorderAttributes` permutation — tiers: identifiers, then relationship FK attributes (`foreignKeyIds`), then rest. `moveAttribute` carries a merge key so rapid Alt+Arrow runs collapse into one history entry. Staged bulk-import rows reorder via ↑/↓ before commit.
+- Bulk attribute import: Paste button or Cmd/Ctrl+V opens a column-mapping editable staging grid (TSV/CSV/list) backed by `addAttributes`/`addEntityWithAttributes`.
 - Naming/documentation standards, model validation, logical-model comparison.
 - HTML model report and CSV data dictionary.
 - Light/dark themes and keyboard-accessible canvas cells.
@@ -48,6 +55,9 @@ Build **Joinery — BY FLYINGBEAR**, a standalone macOS-first data-modeling appl
 - Native atomic New/Open/Save/Save As, file association, single-instance open requests, crash recovery, and full-process quit.
 - Deterministic SVG, scaled PNG, content-sized vector PDF, A4/A3 fit, and tiled A4 PDF.
 - Export preview excludes editor ports, tools, hit areas, and selection artifacts.
+- Mermaid erDiagram export/import (`src/domain/mermaid.ts`); `%% key:` comments round-trip Joinery metadata.
+- drawio export/import (`src/domain/drawio.ts`); one page per diagram, ER arrows, `joineryKind` style keys; import is best-effort for ER table shapes and handles compressed pages.
+- Model import via toolbar Import button (`src/native/modelIO.ts`); import replaces the project after an unsaved-changes prompt.
 
 ## Architecture
 
@@ -62,8 +72,8 @@ Build **Joinery — BY FLYINGBEAR**, a standalone macOS-first data-modeling appl
 ## Quality status
 
 - `npm run check` passes: ESLint, Prettier, TypeScript, Vitest, license policy, and production build.
-- 38 frontend/unit/component tests pass.
-- 12 Playwright workflows pass, including the 100-entity/200-relationship fixture.
+- 101 frontend/unit/component tests pass.
+- 18 Playwright workflows pass, including the 100-entity/200-relationship fixture and n-ary hub/leg creation.
 - 9 Rust tests pass; rustfmt, Cargo check, and Clippy pass.
 - Native debug and optimized macOS binaries compile and launch.
 - Native macOS screenshots reviewed for dark theme, file-open handling, entity colors, and Crow's Foot symbols.

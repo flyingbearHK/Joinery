@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { EntityId } from "../domain/model";
 
 export type Theme = "light" | "dark";
 
@@ -15,14 +16,25 @@ interface ConfirmRequest extends Required<Omit<ConfirmOptions, "destructive">> {
   resolve: (confirmed: boolean) => void;
 }
 
+export interface BulkImportRequest {
+  requestId: number;
+  entityId: EntityId | null;
+  initialText: string;
+}
+
 interface UiStore {
   theme: Theme;
   confirmRequest: ConfirmRequest | null;
+  bulkImport: BulkImportRequest | null;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   confirm: (options: ConfirmOptions) => Promise<boolean>;
   resolveConfirm: (confirmed: boolean) => void;
+  openBulkImport: (entityId: EntityId | null, initialText?: string) => void;
+  closeBulkImport: () => void;
 }
+
+let nextBulkImportRequestId = 0;
 
 function initialTheme(): Theme {
   if (typeof window === "undefined") return "light";
@@ -34,6 +46,7 @@ function initialTheme(): Theme {
 export const useUiStore = create<UiStore>((set, get) => ({
   theme: initialTheme(),
   confirmRequest: null,
+  bulkImport: null,
 
   setTheme: (theme) => {
     window.localStorage.setItem("joinery-theme", theme);
@@ -63,5 +76,20 @@ export const useUiStore = create<UiStore>((set, get) => ({
     if (!request) return;
     set({ confirmRequest: null });
     request.resolve(confirmed);
+  },
+
+  openBulkImport: (entityId, initialText = "") => {
+    nextBulkImportRequestId += 1;
+    set({
+      bulkImport: {
+        requestId: nextBulkImportRequestId,
+        entityId,
+        initialText,
+      },
+    });
+  },
+
+  closeBulkImport: () => {
+    set({ bulkImport: null });
   },
 }));

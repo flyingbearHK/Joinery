@@ -1,7 +1,16 @@
 import { useState } from "react";
-import { CheckCircle2, FileSearch, Plus, Minus, RefreshCw, X } from "lucide-react";
+import {
+  CheckCircle2,
+  FileSearch,
+  GitMerge,
+  Plus,
+  Minus,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { compareProjects, type ModelDifference } from "../domain/compare";
 import { deserializeProject } from "../domain/document";
+import type { JoineryProject } from "../domain/model";
 import { chooseAndReadProject } from "../native/documentIO";
 import { useProjectStore } from "../state/projectStore";
 
@@ -15,8 +24,12 @@ const icons = { added: Plus, removed: Minus, changed: RefreshCw };
 
 export function CompareDialog({ open, onClose, onNotice }: CompareDialogProps) {
   const project = useProjectStore((state) => state.project);
+  const applyComparisonMerge = useProjectStore((state) => state.applyComparisonMerge);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [comparison, setComparison] = useState<JoineryProject | null>(null);
   const [differences, setDifferences] = useState<ModelDifference[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDeletions, setConfirmDeletions] = useState(false);
   const [busy, setBusy] = useState(false);
   if (!open) return null;
 
@@ -25,9 +38,13 @@ export function CompareDialog({ open, onClose, onNotice }: CompareDialogProps) {
     try {
       const opened = await chooseAndReadProject();
       if (!opened) return;
-      const comparison = deserializeProject(opened.contents);
+      const comparisonProject = deserializeProject(opened.contents);
       setFileName(opened.path.split(/[\\/]/).pop() ?? opened.path);
-      setDifferences(compareProjects(project, comparison));
+      setComparison(comparisonProject);
+      const diffs = compareProjects(project, comparisonProject);
+      setDifferences(diffs);
+      setSelected(new Set(diffs.map((difference) => difference.id)));
+      setConfirmDeletions(false);
     } catch (error) {
       onNotice({
         kind: "error",
@@ -36,6 +53,37 @@ export function CompareDialog({ open, onClose, onNotice }: CompareDialogProps) {
       });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const selectedDifferences =
+    differences?.filter((difference) => selected.has(difference.id)) ?? [];
+  const selectedRemovals = selectedDifferences.filter(
+    (difference) => difference.kind === "removed",
+  ).length;
+
+  const applyMerge = () => {
+    if (!comparison || selectedDifferences.length === 0) return;
+    if (selectedRemovals > 0 && !confirmDeletions) {
+      setConfirmDeletions(true);
+      return;
+    }
+    const result = applyComparisonMerge(comparison, selectedDifferences);
+    setConfirmDeletions(false);
+    if (result.applied > 0) {
+      setDifferences(compareProjects(result.project, comparison));
+      setSelected(new Set());
+      onNotice({
+        kind: "success",
+        message: `Merged ${result.applied} change${result.applied === 1 ? "" : "s"}.${
+          result.skipped.length ? ` ${result.skipped.length} could not be applied.` : ""
+        }`,
+      });
+    } else {
+      onNotice({
+        kind: "error",
+        message: result.skipped[0]?.reason ?? "No selected changes could be applied.",
+      });
     }
   };
 
@@ -81,6 +129,27 @@ export function CompareDialog({ open, onClose, onNotice }: CompareDialogProps) {
             <FileSearch size={14} /> {fileName ?? "Choose .joinery file"}
           </button>
         </div>
+        {differences !== null && differences.length > 0 && (
+          <div className="compare-selection-bar">
+            <label className="check-row">
+              <input
+                type="checkbox"
+                aria-label="Select all differences"
+                checked={selected.size === differences.length}
+                onChange={(event) =>
+                  setSelected(
+                    event.target.checked
+                      ? new Set(differences.map((difference) => difference.id))
+                      : new Set(),
+                  )
+                }
+              />
+              <span>
+                {selected.size} of {differences.length} selected
+              </span>
+            </label>
+          </div>
+        )}
         <div className="comparison-list">
           {differences === null ? (
             <div className="validation-empty">
@@ -107,6 +176,18 @@ export function CompareDialog({ open, onClose, onNotice }: CompareDialogProps) {
                   className={`comparison-item comparison-${difference.kind}`}
                   key={difference.id}
                 >
+                  <input
+                    type="checkbox"
+                    aria-label={`Select: ${difference.title}`}
+                    checked={selected.has(difference.id)}
+                    onChange={() => {
+                      const next = new Set(selected);
+                      if (next.has(difference.id)) next.delete(difference.id);
+                      else next.add(difference.id);
+                      setSelected(next);
+                      setConfirmDeletions(false);
+                    }}
+                  />
                   <Icon size={14} />
                   <span>
                     <strong>{difference.title}</strong>
@@ -118,9 +199,40 @@ export function CompareDialog({ open, onClose, onNotice }: CompareDialogProps) {
             })
           )}
         </div>
+        {confirmDeletions && (
+          <div className="merge-confirm" role="alert">
+            <span>
+              Merging includes {selectedRemovals} deletion
+              {selectedRemovals === 1 ? "" : "s"} — objects will be removed from the
+              current model.
+            </span>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setConfirmDeletions(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={applyMerge}
+            >
+              Confirm merge
+            </button>
+          </div>
+        )}
         <footer className="export-dialog-footer">
-          <button type="button" className="button button-primary" onClick={onClose}>
+          <button type="button" className="button button-secondary" onClick={onClose}>
             Done
+          </button>
+          <button
+            type="button"
+            className="button button-primary"
+            disabled={!comparison || selectedDifferences.length === 0}
+            onClick={applyMerge}
+          >
+            <GitMerge size={14} /> Merge {selectedDifferences.length || ""} selected
           </button>
         </footer>
       </section>

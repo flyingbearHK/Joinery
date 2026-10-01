@@ -13,13 +13,16 @@ Joinery is a standalone desktop data-modeling application focused on productive,
 - Primary, alternate, and composite identifiers
 - Association and subtype/supertype relationships
 - Recursive relationships
-- Crow's Foot cardinality at both ends
+- N-ary relationships (three or more participants) rendered as a labelled hub with one leg per entity
+- Crow's Foot cardinality at both ends, including exact-N ("exactly N") values
+- Per-participant role names and attribute mappings on n-ary legs
 - Optional attribute-to-attribute endpoint mappings
 - Identifying and non-identifying semantics
 - Relationship role names and descriptions
+- Inversion entries: named, non-identifying access paths (attribute sets) per entity
 - Obstacle-aware routing with editable, diagram-specific waypoints
 - Model validation and issue navigation
-- Logical model comparison against another `.joinery` document
+- Logical model comparison against another `.joinery` document with selective, checkbox-driven merge
 
 ## Diagram capabilities
 
@@ -30,6 +33,7 @@ Joinery is a standalone desktop data-modeling application focused on productive,
 - Per-entity preset or custom colors, collapse/expand, and pinning
 - ELK automatic layout in a Web Worker
 - Diagram notes and subject-area frames
+- Entity-attached comments — sticky notes that anchor to an entity, follow it when it moves, and hide or delete with it
 - Crow's Foot notation legend
 - Pan, zoom, fit-to-view, selection, and keyboard navigation
 - Light and dark themes
@@ -38,7 +42,8 @@ Joinery is a standalone desktop data-modeling application focused on productive,
 
 - Canonical command history with undo and redo
 - Copy, paste, and duplicate entities
-- Keyboard-first attribute insertion and reordering
+- Keyboard-first attribute insertion and reordering, plus drag-to-reorder and one-click "Arrange" presets (keys & FKs first, alphabetical)
+- Bulk attribute import by pasting spreadsheet, CSV, or plain-text rows into an editable staging grid — fix names, types, PK/Required flags, row order, and entity references before committing; or add rows manually
 - Explicit relationship dialog or direct port-to-port drawing
 - Versioned `.joinery` JSON documents with strict runtime validation
 - Native New/Open/Save/Save As and atomic file replacement
@@ -53,6 +58,8 @@ Joinery is a standalone desktop data-modeling application focused on productive,
 - Vector PDF export sized to content, A4, or A3
 - Multi-page tiled A4 PDF output for large diagrams
 - White or transparent backgrounds and live export preview
+- Mermaid `erDiagram` (.mmd) export and import
+- drawio (.drawio) export with one page per diagram and Crow's Foot markers, plus best-effort drawio import
 - Printable HTML model reports
 - CSV data-dictionary reports
 
@@ -116,13 +123,17 @@ Signing, notarization, updater configuration, and release secrets are documented
 - Select a relationship and drag its purple handles to define a custom route.
 - Single-click an entity in the navigator to select it; double-click to center it.
 - Press `Enter` in an attribute-name field to insert the next attribute.
-- Press `Option/Alt + Arrow Up/Down` to reorder an attribute.
+- Press `Option/Alt + Arrow Up/Down` to reorder an attribute; `Shift`-click the arrow buttons to jump an attribute to the top or bottom; or drag a row by its grip handle. The **Arrange…** menu in the Attributes heading re-sorts the whole list (keys & FKs first, A–Z) in one undoable step.
 - Press `Cmd/Ctrl + Z` to undo and `Shift + Cmd/Ctrl + Z` to redo.
 - Press `Cmd/Ctrl + C` and `Cmd/Ctrl + V` to copy/paste a selected entity.
+- Press `Cmd/Ctrl + V` with pasted spreadsheet rows to bulk-add attributes to the selected entity—or use the **Paste** button in the Attributes section. Edit the staging grid inline: rename, change types, flag PK/Required, or pick a referenced entity to auto-create identifying relationships.
+- Select an entity and use **Add comment** in its inspector to attach a review comment that follows the entity on the diagram.
+- Press `Cmd/Ctrl + Enter` in the paste dialog to confirm the import.
 - Press `Cmd/Ctrl + D` to duplicate a selected entity.
 - Press `Delete` or `Backspace` to remove the selection.
 - Press `Cmd/Ctrl + E` to add an entity.
-- Press `Shift + Cmd/Ctrl + E` to open diagram export.
+- Press `Shift + Cmd/Ctrl + E` to open diagram export (SVG, PNG, PDF, Mermaid, drawio).
+- Use the toolbar **Import** button to load a Mermaid `.mmd` or drawio `.drawio` file as a new model.
 - Press `Cmd/Ctrl + 0` to fit the diagram.
 - Press `Cmd/Ctrl + N`, `O`, or `S` for document operations.
 - Press `Cmd/Ctrl + Q` or use the toolbar quit action to exit Joinery.
