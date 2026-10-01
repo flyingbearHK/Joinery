@@ -26,6 +26,11 @@ Priorities are ordered. A checked item has automated coverage or was exercised a
 - [x] Editable bulk-import staging grid: inline name/type/description edits, PK and Required flags, per-row entity references that create identifying relationships, bulk "type for all", manual add/remove rows, and duplicate/existing-name warnings.
 - [x] Entity-attached comments — sticky notes anchored to an entity via `DiagramNote.entityId`; they follow entity moves, hide with the entity, delete with it, show a dashed connector, and round-trip through drawio metadata.
 - [x] Fast attribute ordering — drag-to-reorder grip, Shift-click to top/bottom, and an "Arrange" menu (keys & FKs first, A–Z) that applies one undoable `reorderAttributes` permutation; staged bulk-import rows reorder before commit.
+- [x] Canvas attribute-row interaction — click a row to select and focus it in the inspector, right-click for key/required/move/delete actions, vertical drag to reorder, Alt+Arrow to move, Delete to remove.
+- [x] Logical type dropdown (`LogicalTypeSelect`) replaces free-text type entry in the inspector and staging grid; custom library types remain options.
+- [x] Application text-size setting (Compact/Default/Large/Extra large) scales UI and canvas fonts; persisted like the theme.
+- [x] `Cmd/Ctrl+F` focuses entity search; `Cmd/Ctrl + =`/`-`/`0` zoom the canvas.
+- [x] Canvas resizes with the window via ResizeObserver + window resize fallback.
 - [x] Attribute-to-attribute endpoint mapping.
 - [x] Diagram rename, delete, duplicate, and entity visibility management.
 - [x] Multiple independent diagrams over one canonical model.

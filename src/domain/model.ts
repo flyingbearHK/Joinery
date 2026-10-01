@@ -210,7 +210,7 @@ export interface JoineryProject {
 }
 
 export type ProjectSelection =
-  | { kind: "entity"; id: EntityId }
+  | { kind: "entity"; id: EntityId; attributeId?: AttributeId }
   | { kind: "relationship"; id: RelationshipId }
   | { kind: "note"; id: DiagramNoteId }
   | { kind: "subject-area"; id: SubjectAreaId }

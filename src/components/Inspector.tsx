@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -20,7 +20,6 @@ import {
   type AttributeSortMode,
 } from "../domain/attributeOrder";
 import {
-  COMMON_LOGICAL_TYPES,
   isNaryRelationship,
   type Cardinality,
   type EntityIdentifier,
@@ -29,6 +28,7 @@ import {
   type RelationshipKind,
 } from "../domain/model";
 import { CardinalitySelect } from "./CardinalitySelect";
+import { LogicalTypeSelect } from "./LogicalTypeSelect";
 import { useProjectStore } from "../state/projectStore";
 import { useUiStore } from "../state/uiStore";
 
@@ -90,13 +90,24 @@ export function Inspector() {
 
   const focusAttribute = useCallback((attributeId: string) => {
     requestAnimationFrame(() => {
-      document
-        .querySelector<HTMLInputElement>(
-          `[data-attribute-name="${CSS.escape(attributeId)}"]`,
-        )
-        ?.focus();
+      const input = document.querySelector<HTMLInputElement>(
+        `[data-attribute-name="${CSS.escape(attributeId)}"]`,
+      );
+      input?.closest(".attribute-editor")?.scrollIntoView({ block: "nearest" });
+      input?.focus();
+      input?.select();
     });
   }, []);
+
+  // Canvas attribute-row clicks land here: scroll the matching row into view
+  // and focus its name field so typing edits immediately.
+  const canvasAttributeId =
+    selection?.kind === "entity" ? selection.attributeId : undefined;
+  const canvasEntityId = selection?.kind === "entity" ? selection.id : undefined;
+  useEffect(() => {
+    if (!canvasAttributeId) return;
+    focusAttribute(canvasAttributeId);
+  }, [canvasAttributeId, canvasEntityId, focusAttribute]);
 
   if (!selection) {
     const diagram = project.diagrams[activeDiagramId];
@@ -165,6 +176,7 @@ export function Inspector() {
 
   if (selection.kind === "entity") {
     const entity = project.model.entities[selection.id];
+    const focusedAttributeId = selection.attributeId ?? null;
     const view = project.diagrams[activeDiagramId]?.entityViews[selection.id] ?? null;
     const comments = Object.values(
       project.diagrams[activeDiagramId]?.notes ?? {},
@@ -349,17 +361,6 @@ export function Inspector() {
               </div>
             </div>
 
-            <datalist id="logical-types">
-              {[
-                ...COMMON_LOGICAL_TYPES,
-                ...Object.values(project.model.logicalTypes).map(
-                  (logicalType) => logicalType.name,
-                ),
-              ].map((logicalType) => (
-                <option key={logicalType} value={logicalType} />
-              ))}
-            </datalist>
-
             <div
               className="attribute-editor-list"
               onDragLeave={(event) => {
@@ -376,8 +377,11 @@ export function Inspector() {
                         ? " drop-after"
                         : " drop-before"
                       : ""
-                  }${dragAttributeId === attribute.id ? " dragging" : ""}`}
+                  }${dragAttributeId === attribute.id ? " dragging" : ""}${
+                    focusedAttributeId === attribute.id ? " focused" : ""
+                  }`}
                   key={attribute.id}
+                  data-attribute-row={attribute.id}
                   onDragOver={(event) => {
                     if (!dragAttributeId || dragAttributeId === attribute.id) return;
                     event.preventDefault();
@@ -481,17 +485,15 @@ export function Inspector() {
                       placeholder="Attribute name"
                       aria-label={`Attribute ${index + 1} name`}
                     />
-                    <input
-                      className="inline-field type-field"
+                    <LogicalTypeSelect
+                      className="inline-field type-field type-select"
                       value={attribute.logicalType}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         updateAttribute(entity.id, attribute.id, {
-                          logicalType: event.target.value,
+                          logicalType: value,
                         })
                       }
-                      placeholder="Type"
-                      list="logical-types"
-                      aria-label={`Attribute ${index + 1} logical type`}
+                      ariaLabel={`Attribute ${index + 1} logical type`}
                     />
                     <input
                       className="inline-field attribute-description-field"

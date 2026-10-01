@@ -77,6 +77,7 @@ function App() {
   const filePath = useDocumentStore((state) => state.filePath);
   const documentActivity = useDocumentStore((state) => state.activity);
   const theme = useUiStore((state) => state.theme);
+  const fontScale = useUiStore((state) => state.fontScale);
   const toggleTheme = useUiStore((state) => state.toggleTheme);
   const [isArranging, setIsArranging] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -277,6 +278,10 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
+    document.documentElement.style.setProperty("--font-scale", String(fontScale));
+  }, [fontScale]);
+
+  useEffect(() => {
     document.title = `${isDirty ? "• " : ""}${projectName} — Joinery`;
   }, [isDirty, projectName]);
 
@@ -314,6 +319,30 @@ function App() {
       if (modifier && key === "n") {
         event.preventDefault();
         void documentController.newProject();
+        return;
+      }
+      if (modifier && key === "f") {
+        event.preventDefault();
+        const input = document.getElementById("entity-search-input");
+        if (input instanceof HTMLInputElement) {
+          input.focus();
+          input.select();
+        }
+        return;
+      }
+      if (modifier && (key === "=" || key === "+")) {
+        event.preventDefault();
+        canvasRef.current?.zoomIn();
+        return;
+      }
+      if (modifier && key === "-") {
+        event.preventDefault();
+        canvasRef.current?.zoomOut();
+        return;
+      }
+      if (modifier && event.key === "0") {
+        event.preventDefault();
+        canvasRef.current?.fit();
         return;
       }
 
@@ -361,13 +390,30 @@ function App() {
         event.preventDefault();
         deleteSelection();
       }
+      if (
+        event.altKey &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+        selection?.kind === "entity" &&
+        selection.attributeId
+      ) {
+        event.preventDefault();
+        const entity = useProjectStore.getState().project.model.entities[selection.id];
+        const index = entity?.attributes.findIndex(
+          (attribute) => attribute.id === selection.attributeId,
+        );
+        if (entity && index !== undefined && index >= 0) {
+          useProjectStore
+            .getState()
+            .moveAttribute(
+              selection.id,
+              selection.attributeId,
+              event.key === "ArrowUp" ? index - 1 : index + 1,
+            );
+        }
+      }
       if (modifier && key === "e") {
         event.preventDefault();
         handleAddEntity();
-      }
-      if (modifier && event.key === "0") {
-        event.preventDefault();
-        canvasRef.current?.fit();
       }
     }
 

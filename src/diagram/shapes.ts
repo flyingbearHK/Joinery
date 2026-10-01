@@ -15,7 +15,7 @@ import type {
 import type { Theme } from "../state/uiStore";
 
 export const ENTITY_NODE_WIDTH = 272;
-const ENTITY_HEADER_HEIGHT = 48;
+export const ENTITY_HEADER_HEIGHT = 48;
 
 Node.define({
   constructorName: "JoineryEntityNode",
@@ -38,8 +38,44 @@ Node.define({
   attrs: {},
   overwrite: true,
 });
-const ATTRIBUTE_ROW_HEIGHT = 32;
+export const ATTRIBUTE_ROW_HEIGHT = 32;
 const ENTITY_BOTTOM_PADDING = 8;
+
+/** Accent fills for a selected/drop-target attribute row, by theme. */
+export const ATTRIBUTE_ROW_ACCENT = {
+  light: "#ece4fb",
+  dark: "#463a60",
+} as const;
+
+const ATTRIBUTE_ROW_BASE = {
+  light: ["#ffffff", "#fbfaff"],
+  dark: ["#292634", "#2e2a39"],
+} as const;
+
+export function attributeRowBaseFill(index: number, dark: boolean): string {
+  const rows = dark ? ATTRIBUTE_ROW_BASE.dark : ATTRIBUTE_ROW_BASE.light;
+  return rows[index % 2];
+}
+
+/** Attribute index under a node-local Y, or null outside the row band. */
+export function attributeIndexAtLocalY(
+  localY: number,
+  attributeCount: number,
+): number | null {
+  const index = Math.floor((localY - ENTITY_HEADER_HEIGHT) / ATTRIBUTE_ROW_HEIGHT);
+  return index >= 0 && index < attributeCount ? index : null;
+}
+
+/** UI font-size preference applied to canvas labels. Re-sync cells after change. */
+let canvasFontScale = 1;
+
+export function setCanvasFontScale(scale: number): void {
+  canvasFontScale = scale;
+}
+
+function fs(size: number): number {
+  return Math.round(size * canvasFontScale * 10) / 10;
+}
 type PortSide = "top" | "right" | "bottom" | "left";
 type AttributePortSide = "left" | "right";
 
@@ -111,7 +147,6 @@ export function createEntityNodeMetadata(
     { tagName: "rect", selector: "header" },
     { tagName: "circle", selector: "entityDot" },
     { tagName: "text", selector: "entityName" },
-    { tagName: "text", selector: "entityKind" },
     { tagName: "text", selector: "pinIndicator" },
   ];
 
@@ -155,22 +190,11 @@ export function createEntityNodeMetadata(
     },
     entityName: {
       x: 34,
-      y: 21,
+      y: ENTITY_HEADER_HEIGHT / 2,
       text: truncate(entity.name || "Untitled entity", 27),
       fill: "#ffffff",
-      fontSize: 14,
+      fontSize: fs(14),
       fontWeight: 650,
-      fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
-      dominantBaseline: "middle",
-    },
-    entityKind: {
-      x: 34,
-      y: 36,
-      text: "LOGICAL ENTITY",
-      fill: "#aaa3c4",
-      fontSize: 8,
-      fontWeight: 650,
-      letterSpacing: 1.2,
       fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
       dominantBaseline: "middle",
     },
@@ -179,7 +203,7 @@ export function createEntityNodeMetadata(
       y: 25,
       text: view.pinned ? "PIN" : "",
       fill: "#cfc5e9",
-      fontSize: 8,
+      fontSize: fs(8),
       fontWeight: 700,
       letterSpacing: 0.7,
       textAnchor: "end",
@@ -214,6 +238,7 @@ export function createEntityNodeMetadata(
         width: size.width - 2,
         height: ATTRIBUTE_ROW_HEIGHT,
         fill: index % 2 === 0 ? palette.row : palette.rowAlternate,
+        "data-attribute-index": index,
       };
       attrs[dividerSelector] = {
         x1: 14,
@@ -222,36 +247,40 @@ export function createEntityNodeMetadata(
         y2: rowY,
         stroke: palette.divider,
         strokeWidth: 1,
+        "data-attribute-index": index,
       };
       attrs[identifierSelector] = {
         x: 18,
         y: rowY + ATTRIBUTE_ROW_HEIGHT / 2,
         text: attribute.isIdentifier ? "◆" : "·",
         fill: attribute.isIdentifier ? "#8b5cf6" : "#c6c2d2",
-        fontSize: attribute.isIdentifier ? 9 : 15,
+        fontSize: attribute.isIdentifier ? fs(9) : fs(15),
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
         textAnchor: "middle",
         dominantBaseline: "middle",
+        "data-attribute-index": index,
       };
       attrs[nameSelector] = {
         x: 32,
         y: rowY + ATTRIBUTE_ROW_HEIGHT / 2,
         text: truncate(attribute.name || "Untitled attribute", 22),
         fill: palette.text,
-        fontSize: 11.5,
+        fontSize: fs(11.5),
         fontWeight: attribute.isIdentifier ? 620 : 480,
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
         dominantBaseline: "middle",
+        "data-attribute-index": index,
       };
       attrs[typeSelector] = {
         x: size.width - 17,
         y: rowY + ATTRIBUTE_ROW_HEIGHT / 2,
         text: truncate(attribute.logicalType || "—", 13),
         fill: palette.muted,
-        fontSize: 10,
+        fontSize: fs(10),
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
         textAnchor: "end",
         dominantBaseline: "middle",
+        "data-attribute-index": index,
       };
       attrs[requiredSelector] = {
         cx: size.width - 8,
@@ -379,7 +408,7 @@ export function createNoteNodeMetadata(
         y: 12,
         text: note.text || "Note",
         fill: dark ? "#f0e8d5" : "#554b35",
-        fontSize: 11,
+        fontSize: fs(11),
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
         textAnchor: "start",
         textVerticalAnchor: "top",
@@ -458,7 +487,7 @@ export function createSubjectAreaNodeMetadata(
         y: 20,
         text: subjectArea.name || "Subject area",
         fill: dark ? "#d6cee2" : subjectArea.color,
-        fontSize: 11,
+        fontSize: fs(11),
         fontWeight: 700,
         textAnchor: "start",
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
@@ -509,7 +538,7 @@ function cardinalityCountLabel(
       label: {
         text: `(${count})`,
         fill: dark ? "#ddd7e8" : "#625c70",
-        fontSize: 8.5,
+        fontSize: fs(8.5),
         fontWeight: 640,
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
       },
@@ -752,7 +781,7 @@ export function createRelationshipEdgeMetadata(
                 label: {
                   text: truncate(relationship.name, 24),
                   fill: dark ? "#ddd7e8" : "#625c70",
-                  fontSize: 10,
+                  fontSize: fs(10),
                   fontWeight: 540,
                   fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
                 },
@@ -877,7 +906,7 @@ export function createRelationshipHubMetadata(
       label: {
         text: truncate(relationship.name || "Relationship", 18),
         fill: dark ? "#e4dff0" : "#4d4660",
-        fontSize: 10,
+        fontSize: fs(10),
         fontWeight: 640,
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
         textWrap: { width: -14, height: -10, ellipsis: true },
@@ -950,7 +979,7 @@ export function createNaryLegMetadata(
         label: {
           text: `(${count})`,
           fill: dark ? "#ddd7e8" : "#625c70",
-          fontSize: 8.5,
+          fontSize: fs(8.5),
           fontWeight: 640,
           fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
         },
@@ -975,7 +1004,7 @@ export function createNaryLegMetadata(
         label: {
           text: truncate(participant.role, 18),
           fill: dark ? "#c9c2d8" : "#6f6880",
-          fontSize: 9,
+          fontSize: fs(9),
           fontWeight: 560,
           fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
         },

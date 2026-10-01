@@ -22,12 +22,21 @@ export interface BulkImportRequest {
   initialText: string;
 }
 
+export const FONT_SCALE_OPTIONS = [
+  { value: 0.9, label: "Compact" },
+  { value: 1, label: "Default" },
+  { value: 1.15, label: "Large" },
+  { value: 1.3, label: "Extra large" },
+] as const;
+
 interface UiStore {
   theme: Theme;
+  fontScale: number;
   confirmRequest: ConfirmRequest | null;
   bulkImport: BulkImportRequest | null;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
+  setFontScale: (scale: number) => void;
   confirm: (options: ConfirmOptions) => Promise<boolean>;
   resolveConfirm: (confirmed: boolean) => void;
   openBulkImport: (entityId: EntityId | null, initialText?: string) => void;
@@ -43,14 +52,26 @@ function initialTheme(): Theme {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function initialFontScale(): number {
+  if (typeof window === "undefined") return 1;
+  const saved = Number(window.localStorage.getItem("joinery-font-scale"));
+  return FONT_SCALE_OPTIONS.some((option) => option.value === saved) ? saved : 1;
+}
+
 export const useUiStore = create<UiStore>((set, get) => ({
   theme: initialTheme(),
+  fontScale: initialFontScale(),
   confirmRequest: null,
   bulkImport: null,
 
   setTheme: (theme) => {
     window.localStorage.setItem("joinery-theme", theme);
     set({ theme });
+  },
+
+  setFontScale: (scale) => {
+    window.localStorage.setItem("joinery-font-scale", String(scale));
+    set({ fontScale: scale });
   },
 
   toggleTheme: () => {

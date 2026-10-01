@@ -36,14 +36,15 @@ Joinery is a standalone desktop data-modeling application focused on productive,
 - Entity-attached comments — sticky notes that anchor to an entity, follow it when it moves, and hide or delete with it
 - Crow's Foot notation legend
 - Pan, zoom, fit-to-view, selection, and keyboard navigation
-- Light and dark themes
+- Click/right-click/drag attribute rows directly on the canvas — row selection syncs to the inspector
+- Light and dark themes plus an adjustable interface text size
 
 ## Productivity and safety
 
 - Canonical command history with undo and redo
 - Copy, paste, and duplicate entities
-- Keyboard-first attribute insertion and reordering, plus drag-to-reorder and one-click "Arrange" presets (keys & FKs first, alphabetical)
-- Bulk attribute import by pasting spreadsheet, CSV, or plain-text rows into an editable staging grid — fix names, types, PK/Required flags, row order, and entity references before committing; or add rows manually
+- Keyboard-first attribute insertion and reordering, plus drag-to-reorder (canvas or inspector) and one-click "Arrange" presets (keys & FKs first, alphabetical)
+- Bulk attribute import by pasting spreadsheet, CSV, or plain-text rows into an editable staging grid — fix names, pick logical types from a curated dropdown, flag PK/Required, order rows, or link a referenced entity before committing; or add rows manually
 - Explicit relationship dialog or direct port-to-port drawing
 - Versioned `.joinery` JSON documents with strict runtime validation
 - Native New/Open/Save/Save As and atomic file replacement
@@ -115,26 +116,27 @@ Signing, notarization, updater configuration, and release secrets are documented
 
 ## Controls
 
-- Drag empty canvas space to pan; use the mouse wheel or trackpad to zoom.
+- Drag empty canvas space to pan; use the mouse wheel or trackpad to zoom. `Cmd/Ctrl + =` and `Cmd/Ctrl + -` zoom in and out; `Cmd/Ctrl + 0` fits the diagram.
+- Press `Cmd/Ctrl + F` to jump to entity search in the navigator.
 - Hover an entity to reveal its relationship ports.
 - Drag between ports aligned with attribute rows to map specific attributes.
 - Use entity-edge ports when a relationship should remain entity-level.
 - Click a relationship line—or select it in the Relationships navigator—to edit it.
 - Select a relationship and drag its purple handles to define a custom route.
 - Single-click an entity in the navigator to select it; double-click to center it.
+- Click an attribute row on the canvas to select it — the matching inspector field highlights and focuses so you can edit immediately. Right-click a row for quick actions (key, required, move to top/bottom, delete); drag a row vertically to reorder it on the entity itself; `Option/Alt + Arrow Up/Down` moves the selected row; `Delete` removes it.
 - Press `Enter` in an attribute-name field to insert the next attribute.
-- Press `Option/Alt + Arrow Up/Down` to reorder an attribute; `Shift`-click the arrow buttons to jump an attribute to the top or bottom; or drag a row by its grip handle. The **Arrange…** menu in the Attributes heading re-sorts the whole list (keys & FKs first, A–Z) in one undoable step.
+- In the inspector, `Shift`-click the arrow buttons to jump an attribute to the top or bottom, or drag a row by its grip handle. The **Arrange…** menu in the Attributes heading re-sorts the whole list (keys & FKs first, A–Z) in one undoable step.
 - Press `Cmd/Ctrl + Z` to undo and `Shift + Cmd/Ctrl + Z` to redo.
 - Press `Cmd/Ctrl + C` and `Cmd/Ctrl + V` to copy/paste a selected entity.
 - Press `Cmd/Ctrl + V` with pasted spreadsheet rows to bulk-add attributes to the selected entity—or use the **Paste** button in the Attributes section. Edit the staging grid inline: rename, change types, flag PK/Required, or pick a referenced entity to auto-create identifying relationships.
 - Select an entity and use **Add comment** in its inspector to attach a review comment that follows the entity on the diagram.
 - Press `Cmd/Ctrl + Enter` in the paste dialog to confirm the import.
 - Press `Cmd/Ctrl + D` to duplicate a selected entity.
-- Press `Delete` or `Backspace` to remove the selection.
+- Press `Delete` or `Backspace` to remove the selection — an entity, a relationship, a note, or a selected attribute row.
 - Press `Cmd/Ctrl + E` to add an entity.
 - Press `Shift + Cmd/Ctrl + E` to open diagram export (SVG, PNG, PDF, Mermaid, drawio).
 - Use the toolbar **Import** button to load a Mermaid `.mmd` or drawio `.drawio` file as a new model.
-- Press `Cmd/Ctrl + 0` to fit the diagram.
 - Press `Cmd/Ctrl + N`, `O`, or `S` for document operations.
 - Press `Cmd/Ctrl + Q` or use the toolbar quit action to exit Joinery.
 

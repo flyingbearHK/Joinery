@@ -10,6 +10,7 @@ import {
   type AttributeImportDraft,
 } from "../domain/attributeImport";
 import { COMMON_LOGICAL_TYPES, type EntityId } from "../domain/model";
+import { LogicalTypeSelect } from "./LogicalTypeSelect";
 import { useProjectStore } from "../state/projectStore";
 import { useUiStore } from "../state/uiStore";
 
@@ -415,12 +416,6 @@ function BulkAttributesDialogInner({
                 )}
               </div>
 
-              <datalist id="bulk-import-types">
-                {knownTypes.map((type) => (
-                  <option key={type} value={type} />
-                ))}
-              </datalist>
-
               <div className="bulk-import-preview" aria-label="Import staging">
                 <table>
                   <thead>
@@ -520,13 +515,12 @@ function BulkAttributesDialogInner({
                             />
                           </td>
                           <td>
-                            <input
-                              className="bulk-cell-input"
-                              list="bulk-import-types"
+                            <LogicalTypeSelect
+                              className="bulk-cell-input bulk-type-select"
                               value={row.logicalType}
-                              aria-label={`Type for ${row.name || `row ${index + 1}`}`}
-                              onChange={(event) =>
-                                patchRow(index, { logicalType: event.target.value })
+                              ariaLabel={`Type for ${row.name || `row ${index + 1}`}`}
+                              onChange={(value) =>
+                                patchRow(index, { logicalType: value })
                               }
                             />
                           </td>

@@ -141,11 +141,11 @@ test("edits staged attributes and links references before committing", async ({
 
   await page.getByLabel(/one attribute per line/i).fill("customer ref\npaid at");
   await page.getByLabel("Name for row 1").fill("customer id");
-  await page.getByLabel("Type for customer id").fill("Identifier");
+  await page.getByLabel("Type for customer id").selectOption("Identifier");
   await page.getByLabel("References for customer id").selectOption({
     label: "Customer",
   });
-  await page.getByLabel("Type for paid at").fill("Date & time");
+  await page.getByLabel("Type for paid at").selectOption("Date & time");
   await page.getByRole("button", { name: "Add 2 attributes" }).click();
 
   await expect(page.getByLabel("Attribute 4 name")).toHaveValue("customer id");
@@ -179,6 +179,60 @@ test("arranges attributes alphabetically and shift-clicks one to the top", async
   const lastName = sorted[sorted.length - 1];
   await page.getByLabel(`Move ${lastName} up`).click({ modifiers: ["Shift"] });
   await expect(nameFields.first()).toHaveValue(lastName);
+});
+
+test("selects, context-menus, and drags attribute rows on the canvas", async ({
+  page,
+}) => {
+  // Attribute rows render as rect backgrounds — shadow/body/header come first,
+  // so the first attribute row is the 4th rect in the entity node.
+  const firstRow = page.locator('.x6-node[data-cell-id="entity_order"] rect').nth(3);
+  await expect(firstRow).toBeVisible();
+  const rowBox = await firstRow.boundingBox();
+  if (!rowBox) throw new Error("Attribute row not found");
+  const rowCenter = {
+    x: rowBox.x + rowBox.width / 2,
+    y: rowBox.y + rowBox.height / 2,
+  };
+  await page.mouse.click(rowCenter.x, rowCenter.y);
+  const focusedName = page.locator(
+    ".attribute-editor.focused input[data-attribute-name]",
+  );
+  await expect(focusedName).toBeFocused();
+
+  // Right-click the same row → context menu with row actions.
+  await page.mouse.click(rowCenter.x, rowCenter.y, { button: "right" });
+  const menu = page.locator(".context-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Move to top" })).toBeVisible();
+
+  // Delete via the menu.
+  const nameBefore = await focusedName.inputValue();
+  await menu.getByRole("menuitem", { name: "Delete attribute" }).click();
+  const remaining = await page
+    .locator("input[data-attribute-name]")
+    .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
+  expect(remaining).not.toContain(nameBefore);
+
+  // Drag row 0 down onto row 1 — the canvas drag reorders the model.
+  const rowZero = page.locator(
+    '.x6-node[data-cell-id="entity_order"] rect[data-attribute-index="0"]',
+  );
+  const rowOne = page.locator(
+    '.x6-node[data-cell-id="entity_order"] rect[data-attribute-index="1"]',
+  );
+  const fromBox = await rowZero.boundingBox();
+  const toBox = await rowOne.boundingBox();
+  if (!fromBox || !toBox) throw new Error("Attribute rows not found");
+  await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + 5, { steps: 6 });
+  await page.mouse.up();
+  const reordered = await page
+    .locator("input[data-attribute-name]")
+    .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
+  expect(reordered[1]).toBe(remaining[0]);
+  expect(reordered[0]).toBe(remaining[1]);
 });
 
 test("attaches a comment to an entity that follows it", async ({ page }) => {

@@ -120,7 +120,6 @@ export function Topbar({
           </div>
           <div className="brand-copy">
             <div className="brand-name">Joinery</div>
-            <div className="brand-tagline">Fit your data together</div>
             <div className="brand-signature">
               <span>BY FLYINGBEAR</span>
               <span>v{__APP_VERSION__}</span>
@@ -200,71 +199,6 @@ export function Topbar({
           >
             <Redo2 size={15} />
           </button>
-          <button
-            type="button"
-            className="topbar-icon-button"
-            title="Logical type library"
-            aria-label="Logical type library"
-            onClick={onManageTypes}
-          >
-            <Library size={15} />
-          </button>
-          <button
-            type="button"
-            className="topbar-icon-button"
-            title="Export model report"
-            aria-label="Export model report"
-            onClick={onExportReport}
-          >
-            <FileText size={15} />
-          </button>
-          <button
-            type="button"
-            className="topbar-icon-button"
-            title="Compare model"
-            aria-label="Compare model"
-            onClick={onCompare}
-          >
-            <GitCompareArrows size={15} />
-          </button>
-          <button
-            type="button"
-            className="topbar-icon-button"
-            title="Validate model"
-            aria-label="Validate model"
-            onClick={onValidate}
-          >
-            <ShieldCheck size={15} />
-          </button>
-          <span className="file-action-divider" />
-          <button
-            type="button"
-            className="topbar-icon-button"
-            title="Settings and updates"
-            aria-label="Settings and updates"
-            onClick={onOpenSettings}
-          >
-            <Settings size={15} />
-          </button>
-          <button
-            type="button"
-            className="topbar-icon-button"
-            title={`Use ${theme === "light" ? "dark" : "light"} theme`}
-            aria-label={`Use ${theme === "light" ? "dark" : "light"} theme`}
-            onClick={onToggleTheme}
-          >
-            {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
-          </button>
-          <button
-            type="button"
-            className="topbar-icon-button"
-            title="Quit Joinery (⌘Q)"
-            aria-label="Quit Joinery"
-            disabled={fileActionsDisabled}
-            onClick={onQuit}
-          >
-            <LogOut size={15} />
-          </button>
         </nav>
       </div>
 
@@ -283,6 +217,43 @@ export function Topbar({
       </div>
 
       <nav className="topbar-actions" aria-label="Diagram actions">
+        <button
+          type="button"
+          className="topbar-icon-button"
+          title="Logical type library"
+          aria-label="Logical type library"
+          onClick={onManageTypes}
+        >
+          <Library size={15} />
+        </button>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          title="Export model report"
+          aria-label="Export model report"
+          onClick={onExportReport}
+        >
+          <FileText size={15} />
+        </button>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          title="Compare model"
+          aria-label="Compare model"
+          onClick={onCompare}
+        >
+          <GitCompareArrows size={15} />
+        </button>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          title="Validate model"
+          aria-label="Validate model"
+          onClick={onValidate}
+        >
+          <ShieldCheck size={15} />
+        </button>
+        <span className="file-action-divider" />
         <button
           type="button"
           className="button button-secondary button-icon-label"
@@ -329,6 +300,35 @@ export function Topbar({
         <button type="button" className="button button-primary" onClick={onAddEntity}>
           <Plus size={16} />
           Entity
+        </button>
+        <span className="file-action-divider" />
+        <button
+          type="button"
+          className="topbar-icon-button"
+          title="Settings and updates"
+          aria-label="Settings and updates"
+          onClick={onOpenSettings}
+        >
+          <Settings size={15} />
+        </button>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          title={`Use ${theme === "light" ? "dark" : "light"} theme`}
+          aria-label={`Use ${theme === "light" ? "dark" : "light"} theme`}
+          onClick={onToggleTheme}
+        >
+          {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
+        </button>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          title="Quit Joinery (⌘Q)"
+          aria-label="Quit Joinery"
+          disabled={fileActionsDisabled}
+          onClick={onQuit}
+        >
+          <LogOut size={15} />
         </button>
       </nav>
     </header>

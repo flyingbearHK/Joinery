@@ -44,6 +44,11 @@ Build **Joinery — BY FLYINGBEAR**, a standalone macOS-first data-modeling appl
 - Canonical undo/redo, copy/paste, duplicate, keyboard attribute insertion/reorder.
 - Attribute ordering: drag-to-reorder grip, Shift-click ↑/↓ jumps to top/bottom, and an "Arrange" select (`sortAttributes` in `src/domain/attributeOrder.ts`) applies one undoable `reorderAttributes` permutation — tiers: identifiers, then relationship FK attributes (`foreignKeyIds`), then rest. `moveAttribute` carries a merge key so rapid Alt+Arrow runs collapse into one history entry. Staged bulk-import rows reorder via ↑/↓ before commit.
 - Bulk attribute import: Paste button or Cmd/Ctrl+V opens a column-mapping editable staging grid (TSV/CSV/list) backed by `addAttributes`/`addEntityWithAttributes`.
+- Canvas attribute rows are interactive: click selects `{kind:"entity", attributeId}` (inspector scrolls/focuses the field), right-click opens a row context menu, vertical drag reorders via `moveAttribute`, Alt+Arrow moves, Delete deletes. Rows carry `data-attribute-index` attrs; hit-testing uses `elementsFromPoint` (the X6 selection box is `pointer-events:none`). Row presses `preventDefault()` on `pointerdown` — suppressing the compatibility mousedown so the node never drags — and click-selection is applied on `pointerup` instead of `node:click`.
+- Logical types are a closed dropdown (`src/components/LogicalTypeSelect.tsx`): `COMMON_LOGICAL_TYPES` + project library types; an unrecognized persisted/imported value is kept as an option so it never renders blank.
+- `uiStore.fontScale` (0.9–1.3) drives `--font-scale` on the root and `setCanvasFontScale` in `shapes.ts`; chosen in Settings, persisted to `joinery-font-scale`.
+- Shortcuts: `Cmd/Ctrl+F` focuses `#entity-search-input`; `Cmd/Ctrl+=`/`-`/`0` call `zoomIn`/`zoomOut`/`fit` on the canvas ref.
+- Canvas resize: `autoResize:false` + `ResizeObserver` AND `window.resize` listener call `graph.resize` (WKWebView misses RO events).
 - Naming/documentation standards, model validation, logical-model comparison.
 - HTML model report and CSV data dictionary.
 - Light/dark themes and keyboard-accessible canvas cells.
@@ -72,8 +77,8 @@ Build **Joinery — BY FLYINGBEAR**, a standalone macOS-first data-modeling appl
 ## Quality status
 
 - `npm run check` passes: ESLint, Prettier, TypeScript, Vitest, license policy, and production build.
-- 101 frontend/unit/component tests pass.
-- 18 Playwright workflows pass, including the 100-entity/200-relationship fixture and n-ary hub/leg creation.
+- 120 frontend/unit/component tests pass.
+- 22 Playwright workflows pass, including canvas attribute-row select/context-menu/drag-reorder.
 - 9 Rust tests pass; rustfmt, Cargo check, and Clippy pass.
 - Native debug and optimized macOS binaries compile and launch.
 - Native macOS screenshots reviewed for dark theme, file-open handling, entity colors, and Crow's Foot symbols.
@@ -81,10 +86,9 @@ Build **Joinery — BY FLYINGBEAR**, a standalone macOS-first data-modeling appl
 
 ## Source control
 
-- Git repository initialized on branch `main`.
-- Baseline implementation commit: `481aa66 feat: establish Joinery logical modeler baseline`.
+- Git repository on branch `main`, pushed to `https://github.com/flyingbearHK/Joinery` (public, MIT).
+- Baseline implementation commit: `481aa66`; milestone commit `96a292f feat: logical-modeling depth and mass-editing workflows`.
 - Repository-local identity: `FlyingBear <flyingbear@local>` because no global Git identity was configured.
-- No remote is configured.
 - Generated `node_modules`, `dist`, Rust targets, Playwright output, and local release config are ignored.
 
 ## External release blockers

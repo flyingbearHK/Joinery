@@ -127,6 +127,7 @@ export function Sidebar({ onFocusEntity, onManageDiagram }: SidebarProps) {
           <label className="search-field">
             <Search size={14} />
             <input
+              id="entity-search-input"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Find an entity"

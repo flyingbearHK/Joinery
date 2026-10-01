@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Download, LoaderCircle, Moon, Sun, X } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useProjectStore } from "../state/projectStore";
-import { useUiStore } from "../state/uiStore";
+import { FONT_SCALE_OPTIONS, useUiStore } from "../state/uiStore";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -15,6 +15,8 @@ export function SettingsDialog({ open, onClose, onNotice }: SettingsDialogProps)
   const updateProjectSettings = useProjectStore((state) => state.updateProjectSettings);
   const theme = useUiStore((state) => state.theme);
   const setTheme = useUiStore((state) => state.setTheme);
+  const fontScale = useUiStore((state) => state.fontScale);
+  const setFontScale = useUiStore((state) => state.setFontScale);
   const [version, setVersion] = useState("0.1.0");
   const [checking, setChecking] = useState(false);
   const updatesConfigured = import.meta.env.VITE_JOINERY_UPDATES === "true";
@@ -110,6 +112,24 @@ export function SettingsDialog({ open, onClose, onNotice }: SettingsDialogProps)
                 <Moon size={12} /> Dark
               </button>
             </div>
+          </section>
+          <section>
+            <div>
+              <strong>Text size</strong>
+              <span>Scale interface and diagram label text.</span>
+            </div>
+            <select
+              className="select-field settings-select"
+              value={fontScale}
+              aria-label="Text size"
+              onChange={(event) => setFontScale(Number(event.target.value))}
+            >
+              {FONT_SCALE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </section>
           <section>
             <div>

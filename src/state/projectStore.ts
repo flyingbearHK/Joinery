@@ -640,7 +640,10 @@ export const useProjectStore = create<ProjectStore>()(
       set((state) => {
         if (
           state.selection?.kind === selection?.kind &&
-          state.selection?.id === selection?.id
+          state.selection?.id === selection?.id &&
+          (state.selection?.kind !== "entity" ||
+            selection?.kind !== "entity" ||
+            state.selection.attributeId === selection.attributeId)
         ) {
           return;
         }
@@ -1917,8 +1920,18 @@ export const useProjectStore = create<ProjectStore>()(
     deleteSelection: () => {
       const selection = get().selection;
       if (!selection) return;
-      if (selection.kind === "entity") get().deleteEntity(selection.id);
-      else if (selection.kind === "relationship") {
+      if (selection.kind === "entity") {
+        if (selection.attributeId) {
+          get().deleteAttribute(selection.id, selection.attributeId);
+          set((state) => {
+            if (state.selection?.kind === "entity") {
+              delete state.selection.attributeId;
+            }
+          });
+        } else {
+          get().deleteEntity(selection.id);
+        }
+      } else if (selection.kind === "relationship") {
         get().deleteRelationship(selection.id);
       } else if (selection.kind === "note") {
         get().deleteDiagramNote(get().activeDiagramId, selection.id);

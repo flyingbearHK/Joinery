@@ -15,6 +15,8 @@ import {
 } from "./exportSvg";
 import {
   attributeIdFromPort,
+  attributeRowBaseFill,
+  ATTRIBUTE_ROW_ACCENT,
   createEntityNodeMetadata,
   createNaryLegMetadata,
   createNoteLinkEdgeMetadata,
@@ -26,6 +28,7 @@ import {
   relationshipHubId,
   relationshipIdFromCellId,
   relationshipLegId,
+  setCanvasFontScale,
 } from "./shapes";
 import { isNaryRelationship } from "../domain/model";
 
@@ -339,9 +342,24 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
     const activeDiagramId = useProjectStore((state) => state.activeDiagramId);
     const selection = useProjectStore((state) => state.selection);
     const theme = useUiStore((state) => state.theme);
+    const fontScale = useUiStore((state) => state.fontScale);
     const [zoom, setZoom] = useState(1);
     const [legendOpen, setLegendOpen] = useState(false);
     const [minimapOpen, setMinimapOpen] = useState(false);
+    const [attributeMenu, setAttributeMenu] = useState<{
+      x: number;
+      y: number;
+      entityId: string;
+      attributeId: string;
+    } | null>(null);
+    const rowDragRef = useRef<{
+      node: Node;
+      entityId: string;
+      attributeId: string;
+      fromIndex: number;
+      targetIndex: number;
+      moved: boolean;
+    } | null>(null);
 
     useEffect(() => {
       const container = containerRef.current;
@@ -351,7 +369,7 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
 
       const graph = new Graph({
         container,
-        autoResize: false,
+        autoResize: true,
         async: false,
         background: { color: theme === "dark" ? "#17151d" : "#f8f7fb" },
         grid: {
@@ -383,6 +401,7 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
         },
         interacting: {
           edgeLabelMovable: false,
+          nodeMovable: () => !rowDragRef.current,
         },
         connecting: {
           snap: { radius: 28 },
@@ -450,9 +469,116 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
         }),
       );
 
-      graph.on("node:click", ({ node }) => {
-        useProjectStore.getState().setSelection(selectionForCell(node));
+      /**
+       * Row index under a point, scanning stacked elements so overlays
+       * (selection box, ports) don't block the hit. Restricted to `node`.
+       */
+      const attributeRowIndexAtPoint = (
+        node: Node,
+        clientX: number,
+        clientY: number,
+      ): number | null => {
+        for (const element of document.elementsFromPoint(clientX, clientY)) {
+          const rowElement = element.closest("[data-attribute-index]");
+          if (!rowElement) continue;
+          const nodeElement = rowElement.closest("[data-cell-id]");
+          if (nodeElement?.getAttribute("data-cell-id") !== node.id) return null;
+          const index = Number(rowElement.getAttribute("data-attribute-index"));
+          const count =
+            useProjectStore.getState().project.model.entities[node.id]?.attributes
+              .length ?? 0;
+          return index >= 0 && index < count ? index : null;
+        }
+        return null;
+      };
+
+      /** Resolve an attribute row on an entity node from a mouse event. */
+      const attributeRowHit = (
+        node: Node,
+        e: { target?: EventTarget | null; clientX: number; clientY: number },
+      ): {
+        entityId: string;
+        attributeId: string;
+        index: number;
+      } | null => {
+        // Port magnets are for relationship drawing — not row operations.
+        if ((e.target as Element | null)?.closest?.("[magnet]")) return null;
+        const data = node.getData<{ kind?: string }>();
+        if (data?.kind !== "entity") return null;
+        const index = attributeRowIndexAtPoint(node, e.clientX, e.clientY);
+        if (index === null) return null;
+        const entity = useProjectStore.getState().project.model.entities[node.id];
+        const attribute = entity?.attributes[index];
+        if (!attribute) return null;
+        return { entityId: node.id, attributeId: attribute.id, index };
+      };
+
+      graph.on("node:click", ({ node, e }) => {
+        const rowHit = attributeRowHit(node, e);
+        useProjectStore
+          .getState()
+          .setSelection(
+            rowHit
+              ? { kind: "entity", id: rowHit.entityId, attributeId: rowHit.attributeId }
+              : selectionForCell(node),
+          );
       });
+
+      graph.on("node:contextmenu", ({ node, e }) => {
+        const rowHit = attributeRowHit(node, e);
+        if (!rowHit) return;
+        e.preventDefault();
+        useProjectStore.getState().setSelection({
+          kind: "entity",
+          id: rowHit.entityId,
+          attributeId: rowHit.attributeId,
+        });
+        setAttributeMenu({
+          x: e.clientX,
+          y: e.clientY,
+          entityId: rowHit.entityId,
+          attributeId: rowHit.attributeId,
+        });
+      });
+
+      /**
+       * Row presses are handled before X6's own mousedown machinery:
+       * cancelling pointerdown suppresses the compatibility mousedown, so the
+       * node never starts a node-drag. Selection happens on pointerup when the
+       * press turned out to be a click rather than a row reorder.
+       */
+      const handleRowPointerDown = (event: PointerEvent) => {
+        if (event.button !== 0) return;
+        if ((event.target as Element | null)?.closest?.("[magnet]")) return;
+        for (const element of document.elementsFromPoint(
+          event.clientX,
+          event.clientY,
+        )) {
+          const rowElement = element.closest("[data-attribute-index]");
+          if (!rowElement) continue;
+          const cellId = rowElement
+            .closest("[data-cell-id]")
+            ?.getAttribute("data-cell-id");
+          const node = cellId ? graph.getCellById(cellId) : null;
+          if (!node?.isNode()) return;
+          if (node.getData<{ kind?: string }>()?.kind !== "entity") return;
+          const index = Number(rowElement.getAttribute("data-attribute-index"));
+          const entity = useProjectStore.getState().project.model.entities[node.id];
+          const attribute = entity?.attributes[index];
+          if (!attribute) return;
+          event.preventDefault();
+          rowDragRef.current = {
+            node,
+            entityId: node.id,
+            attributeId: attribute.id,
+            fromIndex: index,
+            targetIndex: index,
+            moved: false,
+          };
+          return;
+        }
+      };
+      container.addEventListener("pointerdown", handleRowPointerDown, true);
 
       graph.on("edge:click", ({ edge }) => {
         const relationshipId = relationshipIdFromCellId(edge.id);
@@ -568,11 +694,77 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
       };
       container.addEventListener("keydown", handleAccessibleSelection);
 
-      const resizeObserver = new ResizeObserver(() => {
-        graph.resize(container.clientWidth, container.clientHeight);
-      });
+      const resizeGraph = () => {
+        if (container.clientWidth > 0 && container.clientHeight > 0) {
+          graph.resize(container.clientWidth, container.clientHeight);
+        }
+      };
+      const resizeObserver = new ResizeObserver(resizeGraph);
       resizeObserver.observe(container);
-      graph.resize(container.clientWidth, container.clientHeight);
+      // WKWebView does not always fire ResizeObserver for window-driven size
+      // changes, so listen for window resize as well.
+      window.addEventListener("resize", resizeGraph);
+      resizeGraph();
+
+      // In-canvas attribute-row drag: the row under the pointer gets the accent
+      // fill as the drop target and the dragged row is dimmed.
+      const dark = theme === "dark";
+      const clearRowDragVisuals = () => {
+        const drag = rowDragRef.current;
+        if (!drag) return;
+        drag.node.attr(
+          `attributeBackground${drag.targetIndex}/fill`,
+          attributeRowBaseFill(drag.targetIndex, dark),
+        );
+        drag.node.attr(`attributeBackground${drag.fromIndex}/opacity`, 1);
+      };
+      const handleRowDragMove = (event: PointerEvent) => {
+        const drag = rowDragRef.current;
+        if (!drag) return;
+        const targetIndex = attributeRowIndexAtPoint(
+          drag.node,
+          event.clientX,
+          event.clientY,
+        );
+        // Pointer over a gap/header/other node: keep the previous target.
+        if (targetIndex === null || targetIndex === drag.targetIndex) return;
+        drag.node.attr(
+          `attributeBackground${drag.targetIndex}/fill`,
+          attributeRowBaseFill(drag.targetIndex, dark),
+        );
+        drag.node.attr(
+          `attributeBackground${targetIndex}/fill`,
+          ATTRIBUTE_ROW_ACCENT[dark ? "dark" : "light"],
+        );
+        drag.node.attr(`attributeBackground${drag.fromIndex}/opacity`, 0.55);
+        drag.targetIndex = targetIndex;
+        drag.moved = true;
+      };
+      const handleRowPointerUp = () => {
+        const drag = rowDragRef.current;
+        rowDragRef.current = null;
+        if (!drag) return;
+        if (drag.moved) {
+          useProjectStore
+            .getState()
+            .moveAttribute(drag.entityId, drag.attributeId, drag.targetIndex);
+        } else {
+          clearRowDragVisuals();
+          // A press without movement is a click on the row.
+          useProjectStore.getState().setSelection({
+            kind: "entity",
+            id: drag.entityId,
+            attributeId: drag.attributeId,
+          });
+        }
+      };
+      const handleRowPointerCancel = () => {
+        clearRowDragVisuals();
+        rowDragRef.current = null;
+      };
+      window.addEventListener("pointermove", handleRowDragMove);
+      window.addEventListener("pointerup", handleRowPointerUp);
+      window.addEventListener("pointercancel", handleRowPointerCancel);
       graphRef.current = graph;
       syncGraph(graph, theme);
 
@@ -583,6 +775,11 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
 
       return () => {
         resizeObserver.disconnect();
+        window.removeEventListener("resize", resizeGraph);
+        container.removeEventListener("pointerdown", handleRowPointerDown, true);
+        window.removeEventListener("pointermove", handleRowDragMove);
+        window.removeEventListener("pointerup", handleRowPointerUp);
+        window.removeEventListener("pointercancel", handleRowPointerCancel);
         container.removeEventListener("keydown", handleAccessibleSelection);
         graph.dispose();
         graphRef.current = null;
@@ -609,8 +806,9 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
           },
         ],
       });
+      setCanvasFontScale(fontScale);
       syncGraph(graph, theme);
-    }, [project, activeDiagramId, theme]);
+    }, [project, activeDiagramId, theme, fontScale]);
 
     useEffect(() => {
       const graph = graphRef.current;
@@ -644,7 +842,27 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
         if (cell) graph.select(cell);
       }
       suppressSelectionEvent.current = false;
-    }, [selection, project, activeDiagramId]);
+
+      // Tint the selected attribute row on the canvas.
+      const dark = theme === "dark";
+      const accent = ATTRIBUTE_ROW_ACCENT[dark ? "dark" : "light"];
+      graph.getNodes().forEach((node) => {
+        const data = node.getData<{ kind?: string }>();
+        if (data?.kind !== "entity") return;
+        const entity = project.model.entities[node.id];
+        if (!entity) return;
+        entity.attributes.forEach((attribute, index) => {
+          const selected =
+            selection?.kind === "entity" &&
+            selection.id === node.id &&
+            selection.attributeId === attribute.id;
+          node.attr(
+            `attributeBackground${index}/fill`,
+            selected ? accent : attributeRowBaseFill(index, dark),
+          );
+        });
+      });
+    }, [selection, project, activeDiagramId, theme]);
 
     useEffect(() => {
       if (!initialFitComplete.current) return;
@@ -652,6 +870,15 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
       if (!graph) return;
       requestAnimationFrame(() => graph.zoomToFit({ padding: 72, maxScale: 1 }));
     }, [activeDiagramId]);
+
+    useEffect(() => {
+      if (!attributeMenu) return;
+      const closeOnEscape = (event: KeyboardEvent) => {
+        if (event.key === "Escape") setAttributeMenu(null);
+      };
+      window.addEventListener("keydown", closeOnEscape);
+      return () => window.removeEventListener("keydown", closeOnEscape);
+    }, [attributeMenu]);
 
     useImperativeHandle(
       ref,
@@ -753,6 +980,114 @@ export const DiagramCanvas = forwardRef<DiagramCanvasHandle>(
         >
           <Info size={14} />
         </button>
+        {attributeMenu && (
+          <div
+            className="context-menu-backdrop"
+            onMouseDown={() => setAttributeMenu(null)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setAttributeMenu(null);
+            }}
+          >
+            <div
+              className="context-menu"
+              style={{ left: attributeMenu.x, top: attributeMenu.y }}
+              role="menu"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              {(() => {
+                const state = useProjectStore.getState();
+                const entity = state.project.model.entities[attributeMenu.entityId];
+                const attribute = entity?.attributes.find(
+                  (candidate) => candidate.id === attributeMenu.attributeId,
+                );
+                if (!entity || !attribute) return null;
+                const index = entity.attributes.findIndex(
+                  (candidate) => candidate.id === attributeMenu.attributeId,
+                );
+                const run = (action: () => void) => () => {
+                  action();
+                  setAttributeMenu(null);
+                };
+                return (
+                  <>
+                    <div className="context-menu-title">
+                      {attribute.name || "Untitled attribute"}
+                    </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={run(() =>
+                        state.updateAttribute(attributeMenu.entityId, attribute.id, {
+                          isIdentifier: !attribute.isIdentifier,
+                        }),
+                      )}
+                    >
+                      {attribute.isIdentifier
+                        ? "Remove from primary key"
+                        : "Make primary key"}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={run(() =>
+                        state.updateAttribute(attributeMenu.entityId, attribute.id, {
+                          isRequired: !attribute.isRequired,
+                        }),
+                      )}
+                    >
+                      {attribute.isRequired ? "Make optional" : "Make required"}
+                    </button>
+                    <div className="context-menu-divider" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={index === 0}
+                      onClick={run(() =>
+                        state.moveAttribute(attributeMenu.entityId, attribute.id, 0),
+                      )}
+                    >
+                      Move to top
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={index === entity.attributes.length - 1}
+                      onClick={run(() =>
+                        state.moveAttribute(
+                          attributeMenu.entityId,
+                          attribute.id,
+                          entity.attributes.length - 1,
+                        ),
+                      )}
+                    >
+                      Move to bottom
+                    </button>
+                    <div className="context-menu-divider" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="context-menu-danger"
+                      onClick={run(() => {
+                        state.deleteAttribute(
+                          attributeMenu.entityId,
+                          attributeMenu.attributeId,
+                        );
+                        if (state.selection?.kind === "entity") {
+                          useProjectStore.setState({
+                            selection: { kind: "entity", id: attributeMenu.entityId },
+                          });
+                        }
+                      })}
+                    >
+                      Delete attribute
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
         <div className="zoom-controls" aria-label="Canvas zoom controls">
           <button
             type="button"

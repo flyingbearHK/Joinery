@@ -23,6 +23,7 @@
   --purple-soft: #f0ebfc;
   --amber: #e79a27;
   --danger: #c84c5a;
+  --font-scale: 1;
 }
 
 * {
@@ -59,7 +60,7 @@ select:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 980px;
@@ -75,8 +76,8 @@ select:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  height: 64px;
-  padding: 0 18px;
+  min-height: 76px;
+  padding: 8px 22px;
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 1px 6px rgba(44, 36, 61, 0.035);
@@ -106,23 +107,23 @@ select:focus-visible {
 .file-actions {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
 }
 
 .file-action-divider {
   width: 1px;
-  height: 18px;
-  margin: 0 3px;
+  height: 20px;
+  margin: 0 6px;
   background: #e5e1e9;
 }
 
 .topbar-icon-button {
   display: grid;
-  width: 29px;
-  height: 29px;
+  width: 33px;
+  height: 33px;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 8px;
   padding: 0;
   color: #756d80;
   background: transparent;
@@ -163,16 +164,10 @@ select:focus-visible {
 
 .brand-name {
   color: #262134;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale, 1));
   font-weight: 720;
   letter-spacing: -0.015em;
   line-height: 16px;
-}
-
-.brand-tagline {
-  color: #9891a4;
-  font-size: 8.5px;
-  line-height: 10px;
 }
 
 .brand-signature {
@@ -180,7 +175,7 @@ select:focus-visible {
   align-items: center;
   gap: 5px;
   color: #766b88;
-  font-size: 6.5px;
+  font-size: calc(6.5px * var(--font-scale, 1));
   font-weight: 740;
   letter-spacing: 0.09em;
   line-height: 9px;
@@ -212,7 +207,7 @@ select:focus-visible {
   max-width: 420px;
   overflow: hidden;
   color: #3a3448;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--font-scale, 1));
   font-weight: 640;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -224,7 +219,7 @@ select:focus-visible {
   gap: 4px;
   margin-top: 2px;
   color: #9a93a5;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .save-state svg {
@@ -247,7 +242,8 @@ select:focus-visible {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .button {
@@ -259,7 +255,7 @@ select:focus-visible {
   border: 1px solid transparent;
   border-radius: 9px;
   padding: 0 12px;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   font-weight: 620;
   cursor: pointer;
   transition:
@@ -358,7 +354,7 @@ select:focus-visible {
   justify-content: space-between;
   padding: 0 7px;
   color: #8d8698;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   font-weight: 720;
   letter-spacing: 0.095em;
   text-transform: uppercase;
@@ -370,7 +366,7 @@ select:focus-visible {
   padding: 1px 6px;
   color: #938ba0;
   background: #f1eff5;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   text-align: center;
 }
 
@@ -419,7 +415,7 @@ select:focus-visible {
   padding: 0 8px;
   color: #625b6e;
   background: transparent;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--font-scale, 1));
   text-align: left;
   cursor: pointer;
   transition: 130ms ease;
@@ -462,7 +458,7 @@ select:focus-visible {
   padding: 1px 5px;
   color: #8b8397;
   background: rgba(255, 255, 255, 0.7);
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   text-align: center;
 }
 
@@ -493,7 +489,7 @@ select:focus-visible {
   outline: 0;
   color: #4f485a;
   background: transparent;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
 }
 
 .search-field input::placeholder {
@@ -524,7 +520,7 @@ select:focus-visible {
 .empty-list {
   padding: 16px 8px;
   color: #aaa3b2;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
   text-align: center;
 }
 
@@ -537,7 +533,7 @@ select:focus-visible {
   border-top: 1px solid #eeecf2;
   padding: 0 15px;
   color: #aaa3b2;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
 }
 
 .model-summary {
@@ -593,7 +589,7 @@ select:focus-visible {
   color: #91899c;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 2px 8px rgba(40, 32, 58, 0.04);
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
   pointer-events: none;
   white-space: nowrap;
   backdrop-filter: blur(8px);
@@ -676,7 +672,7 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   color: #51495b;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .notation-legend header button {
@@ -707,14 +703,14 @@ select:focus-visible {
 .notation-legend dt {
   color: #7053ac;
   font-family: ui-monospace, monospace;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   font-weight: 700;
 }
 
 .notation-legend dd {
   margin: 1px 0 0;
   color: #8e8698;
-  font-size: 7px;
+  font-size: calc(7px * var(--font-scale, 1));
 }
 
 .zoom-controls {
@@ -753,7 +749,7 @@ select:focus-visible {
 
 .zoom-controls > span {
   min-width: 40px;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -794,6 +790,8 @@ select:focus-visible {
   border: 1.5px solid #8b68d3 !important;
   border-radius: 13px;
   box-shadow: 0 0 0 3px rgba(127, 92, 204, 0.1);
+  /* Visual outline only — clicks must reach the attribute rows beneath. */
+  pointer-events: none;
 }
 
 .joinery-edge-line {
@@ -859,19 +857,19 @@ select:focus-visible {
 .inspector-title-icon.note {
   color: #8a6c22;
   background: #fff4ce;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale, 1));
 }
 
 .inspector-title-icon.subject {
   color: #7653b8;
   background: #f0eafa;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale, 1));
 }
 
 .eyebrow {
   display: block;
   color: #a099aa;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 740;
   letter-spacing: 0.12em;
   line-height: 12px;
@@ -887,7 +885,7 @@ select:focus-visible {
 .inspector h2 {
   overflow: hidden;
   color: #363040;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   font-weight: 680;
   line-height: 18px;
   text-overflow: ellipsis;
@@ -896,7 +894,7 @@ select:focus-visible {
 
 .inspector h3 {
   color: #484151;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   font-weight: 650;
 }
 
@@ -916,7 +914,7 @@ select:focus-visible {
   display: block;
   margin: 0 0 5px;
   color: #746d7e;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   font-weight: 610;
 }
 
@@ -931,7 +929,7 @@ select:focus-visible {
   border-radius: 8px;
   color: #403949;
   background: #fff;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--font-scale, 1));
   transition: 140ms ease;
 }
 
@@ -967,7 +965,7 @@ select:focus-visible {
   padding: 0;
   color: #7555ba;
   background: transparent;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   font-weight: 580;
   cursor: pointer;
 }
@@ -994,7 +992,7 @@ select:focus-visible {
   padding: 0 8px;
   color: #665a76;
   background: #fff;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
   font-weight: 610;
   cursor: pointer;
 }
@@ -1030,7 +1028,7 @@ select:focus-visible {
   border-radius: 5px;
   color: #8e8699;
   background: #efedf3;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 680;
 }
 
@@ -1050,7 +1048,7 @@ select:focus-visible {
   padding: 0 5px;
   color: #46404f;
   background: transparent;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .inline-field:hover {
@@ -1066,7 +1064,7 @@ select:focus-visible {
 .attribute-description-field {
   grid-column: 1 / -1;
   color: #8b8396;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
 }
 
 .attribute-actions {
@@ -1087,7 +1085,7 @@ select:focus-visible {
   border-radius: 5px;
   color: #938b9d;
   background: #fff;
-  font-size: 7px;
+  font-size: calc(7px * var(--font-scale, 1));
   font-weight: 650;
   cursor: pointer;
 }
@@ -1131,7 +1129,7 @@ select:focus-visible {
   border-radius: 9px;
   color: #8c8298;
   background: #fbfafc;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -1196,7 +1194,7 @@ select:focus-visible {
   gap: 7px;
   margin-top: 10px;
   color: #706779;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   font-weight: 620;
   cursor: pointer;
 }
@@ -1215,7 +1213,7 @@ select:focus-visible {
 .entity-custom-color code {
   color: #90889a;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 500;
 }
 
@@ -1238,7 +1236,7 @@ select:focus-visible {
 
 .dimension-fields label {
   color: #81798b;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   font-weight: 650;
 }
 
@@ -1251,7 +1249,7 @@ select:focus-visible {
   padding: 0 7px;
   color: #51495b;
   background: #fff;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .note-textarea {
@@ -1262,7 +1260,7 @@ select:focus-visible {
   display: block;
   margin: 8px 0 4px;
   color: #91899b;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 650;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1276,7 +1274,7 @@ select:focus-visible {
   margin-bottom: 8px;
   overflow: hidden;
   color: #4a4353;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
   font-weight: 640;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1326,7 +1324,7 @@ select:focus-visible {
   padding: 0 6px;
   background: #ffffff;
   color: #37323f;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .relationship-line-preview {
@@ -1353,7 +1351,7 @@ select:focus-visible {
 
 .role-name-fields label {
   color: #81798b;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   font-weight: 650;
 }
 
@@ -1368,7 +1366,7 @@ select:focus-visible {
 
 .relationship-dialog-basics label {
   color: #81798b;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   font-weight: 650;
 }
 
@@ -1382,7 +1380,7 @@ select:focus-visible {
   padding: 7px 9px;
   color: #725a29;
   background: #fff7e7;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   line-height: 12px;
 }
 
@@ -1400,13 +1398,13 @@ select:focus-visible {
 
 .relationship-route-control strong {
   color: #51495a;
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--font-scale, 1));
 }
 
 .relationship-route-control span {
   margin-top: 3px;
   color: #91899a;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   line-height: 12px;
 }
 
@@ -1415,7 +1413,7 @@ select:focus-visible {
   align-items: flex-start;
   gap: 9px;
   color: #81798a;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
   line-height: 13px;
   cursor: pointer;
 }
@@ -1432,7 +1430,7 @@ select:focus-visible {
   display: block;
   margin-bottom: 2px;
   color: #514a5a;
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--font-scale, 1));
 }
 
 .inspector-empty {
@@ -1456,13 +1454,13 @@ select:focus-visible {
 
 .inspector-empty h2 {
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .inspector-empty > p {
   max-width: 220px;
   color: #8f8799;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   line-height: 15px;
 }
 
@@ -1474,7 +1472,7 @@ select:focus-visible {
   padding: 10px 12px;
   color: #8a8294;
   background: #faf9fc;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   line-height: 13px;
   text-align: left;
 }
@@ -1483,7 +1481,7 @@ select:focus-visible {
   display: block;
   margin-bottom: 3px;
   color: #62586f;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
 }
 
 /* Export dialog */
@@ -1523,7 +1521,7 @@ select:focus-visible {
 .export-dialog-header h2 {
   margin: 1px 0 0;
   color: #342e3e;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
   font-weight: 690;
 }
 
@@ -1580,7 +1578,7 @@ select:focus-visible {
   padding: 3px 7px;
   color: #81798c;
   background: rgba(255, 255, 255, 0.92);
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-variant-numeric: tabular-nums;
   backdrop-filter: blur(5px);
 }
@@ -1595,7 +1593,7 @@ select:focus-visible {
   color: #5f5768;
   background: #f7f5f9;
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   line-height: 14px;
   white-space: pre;
 }
@@ -1608,7 +1606,7 @@ select:focus-visible {
   display: block;
   margin-bottom: 7px;
   color: #665e70;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   font-weight: 680;
 }
 
@@ -1653,7 +1651,7 @@ select:focus-visible {
 
 .format-option strong {
   color: #4e4659;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--font-scale, 1));
   font-weight: 700;
 }
 
@@ -1664,7 +1662,7 @@ select:focus-visible {
 .format-option span {
   overflow: hidden;
   color: #9991a2;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1685,7 +1683,7 @@ select:focus-visible {
 .export-inline-group p {
   margin: 0;
   color: #9a93a4;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
   line-height: 13px;
 }
 
@@ -1706,7 +1704,7 @@ select:focus-visible {
   padding: 0 10px;
   color: #857d8f;
   background: transparent;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
   font-weight: 610;
   cursor: pointer;
 }
@@ -1732,7 +1730,7 @@ select:focus-visible {
   padding: 9px 11px;
   color: #82798d;
   background: #faf8fc;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
   line-height: 14px;
 }
 
@@ -1783,7 +1781,7 @@ select:focus-visible {
   color: #51495b;
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 12px 34px rgba(41, 32, 59, 0.16);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
   line-height: 15px;
   backdrop-filter: blur(10px);
   animation: notice-in 180ms ease-out;
@@ -1891,14 +1889,14 @@ select:focus-visible {
 
 .inspector-overview dt {
   color: #9890a1;
-  font-size: 7px;
+  font-size: calc(7px * var(--font-scale, 1));
   text-transform: uppercase;
 }
 
 .inspector-overview dd {
   margin: 3px 0 0;
   color: #4e4658;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
   font-weight: 700;
 }
 
@@ -1937,7 +1935,7 @@ select:focus-visible {
   border-radius: 5px;
   color: #8e8699;
   background: #efedf3;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 680;
 }
 
@@ -1976,6 +1974,11 @@ select:focus-visible {
   opacity: 0.45;
 }
 
+.attribute-editor.focused {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 2px rgba(120, 87, 200, 0.22);
+}
+
 .attribute-editor.drop-before {
   box-shadow: inset 0 2px 0 #7654bf;
 }
@@ -1999,7 +2002,7 @@ select:focus-visible {
   padding: 0 4px;
   color: #948c9d;
   background: transparent;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
   line-height: 16px;
   cursor: pointer;
 }
@@ -2012,6 +2015,66 @@ select:focus-visible {
 .bulk-order-cell button:disabled {
   opacity: 0.25;
   cursor: default;
+}
+
+.context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 61;
+  min-width: 176px;
+  padding: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgba(40, 32, 58, 0.18);
+}
+
+.context-menu-title {
+  padding: 5px 9px 6px;
+  color: var(--muted);
+  font-size: calc(8.5px * var(--font-scale, 1));
+  font-weight: 680;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  padding: 6px 9px;
+  color: var(--ink);
+  background: transparent;
+  font-size: calc(11px * var(--font-scale, 1));
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover:not(:disabled) {
+  background: var(--purple-soft);
+  color: var(--purple-dark);
+}
+
+.context-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.context-menu button.context-menu-danger:hover {
+  background: #fbecec;
+  color: var(--danger);
+}
+
+.context-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }
 
 .identifier-list {
@@ -2041,7 +2104,7 @@ select:focus-visible {
   border-radius: 6px;
   color: #655d70;
   background: #fff;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
 }
 
 .identifier-attributes {
@@ -2060,7 +2123,7 @@ select:focus-visible {
   padding: 3px 7px;
   color: #746c7e;
   background: #fff;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -2074,7 +2137,7 @@ select:focus-visible {
 .empty-copy {
   margin: 0;
   color: #96909f;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
   line-height: 14px;
 }
 
@@ -2127,13 +2190,13 @@ select:focus-visible {
 
 .confirm-copy h2 {
   margin: 1px 0 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .confirm-copy p {
   margin: 0;
   color: #81798b;
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--font-scale, 1));
   line-height: 15px;
 }
 
@@ -2180,7 +2243,7 @@ select:focus-visible {
 .endpoint-fields legend {
   padding: 0 4px;
   color: #6f657b;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   font-weight: 700;
 }
 
@@ -2188,7 +2251,7 @@ select:focus-visible {
   display: block;
   margin-top: 8px;
   color: #8a8294;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 650;
   text-transform: uppercase;
 }
@@ -2219,7 +2282,7 @@ select:focus-visible {
   gap: 7px;
   margin-top: 14px;
   color: #8b8395;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .relationship-dialog-participants {
@@ -2252,7 +2315,7 @@ select:focus-visible {
   display: block;
   margin-top: 8px;
   color: #8a8294;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 650;
   text-transform: uppercase;
 }
@@ -2275,12 +2338,12 @@ select:focus-visible {
   justify-content: center;
   gap: 6px;
   color: #938a9e;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .dialog-empty-state strong {
   color: #51495b;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .diagram-dialog-body {
@@ -2294,7 +2357,7 @@ select:focus-visible {
 .diagram-layout-note {
   margin: 0 0 13px;
   color: #8f8799;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   line-height: 13px;
 }
 
@@ -2311,12 +2374,12 @@ select:focus-visible {
 
 .visibility-heading h3 {
   margin: 2px 0 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .visibility-heading > span {
   color: #948c9e;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
 }
 
 .visibility-bulk-actions {
@@ -2334,7 +2397,7 @@ select:focus-visible {
   padding: 4px 7px;
   color: #746b7f;
   background: #fff;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -2355,7 +2418,7 @@ select:focus-visible {
   border-radius: 7px;
   padding: 0 7px;
   color: #625a6d;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -2422,12 +2485,12 @@ select:focus-visible {
 
 .settings-body strong {
   color: #51495b;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
 }
 .settings-body span {
   margin-top: 3px;
   color: #928a9c;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
 }
 .settings-select {
   width: 190px;
@@ -2438,7 +2501,7 @@ select:focus-visible {
   align-items: center;
   gap: 6px;
   color: #746c7f;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -2453,7 +2516,7 @@ select:focus-visible {
 }
 .settings-body code {
   color: #7554ba;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .compare-toolbar {
@@ -2472,12 +2535,12 @@ select:focus-visible {
 
 .compare-toolbar > div strong {
   color: #51495b;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
 }
 .compare-toolbar > div span,
 .compare-toolbar > span {
   color: #978fa0;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
 }
 
 .comparison-list {
@@ -2515,7 +2578,7 @@ select:focus-visible {
   align-items: center;
   gap: 8px;
   color: #6f6679;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   font-weight: 600;
 }
 
@@ -2527,7 +2590,7 @@ select:focus-visible {
   background: #fff7e6;
   padding: 9px 12px;
   color: #7a5c1e;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .merge-confirm span {
@@ -2539,15 +2602,15 @@ select:focus-visible {
 }
 .comparison-item strong {
   color: #51495b;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 .comparison-item small {
   margin-top: 2px;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
 }
 .comparison-item em {
   color: #9b92a5;
-  font-size: 7px;
+  font-size: calc(7px * var(--font-scale, 1));
   font-style: normal;
   text-transform: uppercase;
 }
@@ -2595,13 +2658,13 @@ select:focus-visible {
 
 .report-options strong {
   color: #4f475a;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
 }
 
 .report-options small {
   margin-top: 5px;
   color: #91899a;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   line-height: 13px;
 }
 
@@ -2614,7 +2677,7 @@ select:focus-visible {
 .type-library-body > p {
   margin: 0 0 13px;
   color: #888091;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   line-height: 15px;
 }
 
@@ -2624,7 +2687,7 @@ select:focus-visible {
   justify-content: space-between;
   margin-bottom: 8px;
   color: #625a6d;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .type-library-list {
@@ -2650,7 +2713,7 @@ select:focus-visible {
 
 .type-editor-grid label {
   color: #81798b;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 650;
 }
 
@@ -2674,7 +2737,7 @@ select:focus-visible {
   gap: 4px;
   border-radius: 999px;
   padding: 4px 8px;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   font-weight: 650;
 }
 
@@ -2726,12 +2789,12 @@ select:focus-visible {
 }
 .validation-issue strong {
   color: #4e4659;
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--font-scale, 1));
 }
 .validation-issue small {
   margin-top: 3px;
   color: #91899b;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   line-height: 12px;
 }
 .validation-issue.validation-error > svg {
@@ -2755,11 +2818,11 @@ select:focus-visible {
 }
 .validation-empty strong {
   color: #4c6558;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 .validation-empty span {
   color: #91899b;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
 }
 
 /* Bulk attribute import */
@@ -2802,7 +2865,7 @@ select:focus-visible {
 .bulk-import-textarea {
   min-height: 104px;
   resize: vertical;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   line-height: 15px;
 }
 
@@ -2832,7 +2895,7 @@ select:focus-visible {
   align-items: baseline;
   gap: 4px;
   color: #7d7488;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 650;
   text-transform: uppercase;
 }
@@ -2840,7 +2903,7 @@ select:focus-visible {
 .bulk-import-column > span em {
   overflow: hidden;
   color: #a39cac;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
   font-style: normal;
   font-weight: 500;
   text-overflow: ellipsis;
@@ -2859,7 +2922,7 @@ select:focus-visible {
 .bulk-import-preview table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .bulk-import-preview th {
@@ -2869,7 +2932,7 @@ select:focus-visible {
   padding: 5px 8px;
   color: #8b8394;
   background: #f6f4f9;
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--font-scale, 1));
   font-weight: 680;
   text-align: left;
   text-transform: uppercase;
@@ -2911,7 +2974,7 @@ select:focus-visible {
 .bulk-import-note {
   margin: 4px 0 0;
   color: #a39cac;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale, 1));
 }
 
 .bulk-import-toolbar {
@@ -2925,7 +2988,7 @@ select:focus-visible {
   align-items: center;
   gap: 6px;
   color: #8b8394;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
 }
 
 .bulk-import-apply-all .compact-select {
@@ -2935,7 +2998,7 @@ select:focus-visible {
 .bulk-import-warning-count {
   margin-left: auto;
   color: #a16207;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
   font-weight: 600;
 }
 
@@ -2990,7 +3053,7 @@ select:focus-visible {
   color: #554b35;
   background: #fff9dc;
   font: inherit;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   text-align: left;
   cursor: pointer;
   overflow: hidden;
@@ -3024,7 +3087,7 @@ select:focus-visible {
 .bulk-import-hint {
   margin-right: auto;
   color: #9a93a4;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale, 1));
 }
 
 /* Dark theme */
@@ -3251,10 +3314,6 @@ select:focus-visible {
 
   .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .brand-tagline {
-    display: none;
   }
 
   .notice {
